@@ -11,17 +11,20 @@ Repo ini merupakan monorepo yang menggabungkan **Batch Processing**, **Stream Pr
 │   ├── spark_batch_etl.py    
 │   └── data/                        
 │
+|
 ├── 2-stream-processing/      
 │   ├── kafka_producer.py       
 │   ├── spark_streaming.py     
 │   └── checkpoints/                
 │
+|
 ├── 3-ml-integration/        
 │   ├── feature_engineering.py  
 │   ├── train_model.py          
 │   ├── batch_inference.py       
 │   └── realtime_prediction.py  
 │
+|
 ├── 4-dashboard-monitoring/   
 │   ├── grafana-dashboards/
 │   │   └── stock-dashboard.json    
@@ -31,6 +34,7 @@ Repo ini merupakan monorepo yang menggabungkan **Batch Processing**, **Stream Pr
 │   │   └── alertmanager.yml         
 │   └── docker-compose.override.yml  
 │
+|
 ├── 5-docs/                   
 │   ├── screenshots/
 │   │   ├── ss_1_minio_login.png
@@ -41,6 +45,7 @@ Repo ini merupakan monorepo yang menggabungkan **Batch Processing**, **Stream Pr
 │   └── laporan/
 │       └── template_laporan.md      
 │
+|
 ├── 6-config/               
 │   ├── .env.example                 
 │   └── minio-policy.json            
@@ -53,13 +58,12 @@ Repo ini merupakan monorepo yang menggabungkan **Batch Processing**, **Stream Pr
 
 ## 👥 Anggota Kelompok & Pembagian Tugas
 
-| No | Nama | NIM | Fokus | Aspek Penilaian |
-|----|------|-----|-------|------------------|
-| 1 | Adrian Farrel Aziz Yatyoga | L0224040 | **Data Engineer & Infrastructure** | Batch Processing, Stream Processing, MinIO, Kafka, Spark, Keamanan Data |
-| 2 | Michael Christian Shan Geraldo | L0224035 | **ML Engineer & Analytics** | ML Integration, Dashboard Grafana, Monitoring & Logging, Alerting, Governance |
+| No | Nama | NIM | 
+|----|------|-----|
+| 1 | Adrian Farrel Aziz Yatyoga | L0224040 |
+| 2 | Michael Christian Shan Geraldo | L0224035 | 
 
-### Pembagian Detail
-
+# Pembagian Detail
 **👤 Ian – Data Engineer & Infrastructure:**
 -  Perancangan Arsitektur Pipeline (desain end-to-end)
 -  Batch Processing (Spark Batch ETL: SMA, Volatility, indikator teknikal)
@@ -80,11 +84,11 @@ Repo ini merupakan monorepo yang menggabungkan **Batch Processing**, **Stream Pr
 
 ```bash
 # Clone repo
-git clone <URL_REPO_KALIAN>
+git clone git@github.com:iaanne/ipbd-tbp-kelompok7.git
 cd ipbd-stock-pipeline-kelompok7
 
 # Copy environment config
-cp 6-config/.env.example .env
+cp config/.env.example .env
 
 # Install Python dependencies
 pip install -r requirements.txt
@@ -95,7 +99,7 @@ docker-compose up -d
 # Cek status container
 docker-compose ps
 
-cd 1-batch-processing
+cd batch-processing
 
 # Step 1: Scraping data historis dari Yahoo Finance
 python scrape_historical.py
@@ -107,7 +111,7 @@ python minio_operations.py
 python spark_batch_etl.py
 
 
-cd 2-stream-processing
+cd stream-processing
 
 # Terminal 1: Jalankan Kafka Producer (simulasi data real-time)
 python kafka_producer.py
@@ -116,7 +120,7 @@ python kafka_producer.py
 python spark_streaming.py
 
 
-cd 3-ml-integration
+cd ml-integration
 
 # Step 1: Feature Engineering (baca processed data dari MinIO)
 python feature_engineering.py
