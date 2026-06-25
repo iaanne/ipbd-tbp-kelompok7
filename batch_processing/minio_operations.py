@@ -4,20 +4,20 @@ import pandas as pd
 from datetime import datetime
 import os
 
-# konfigurasi MINIO
-MINIO_ENDPOINT = "http://localhost:9000"
-MINIO_ACCESS_KEY = "admin"
-MINIO_SECRET_KEY = "SuperSecretPassword123!"
-BUCKET_NAME = "stock-indonesia-bucket"
+# konfigurasi GARAGE S3 (pengganti MinIO)
+GARAGE_ENDPOINT = os.getenv('GARAGE_ENDPOINT', 'http://localhost:3900')
+GARAGE_ACCESS_KEY = os.getenv('GARAGE_ACCESS_KEY', 'GKc98624849db70446555a905b')
+GARAGE_SECRET_KEY = os.getenv('GARAGE_SECRET_KEY', '934f97fb29df4f1da215e689c57ab5b42c4e42798841961e4df77d4d3ae6c828')
+BUCKET_NAME = os.getenv('GARAGE_BUCKET', 'stock-bucket')
 
-# inisialisasi client S3
+# inisialisasi client S3 (Garage-compatible)
 s3_client = boto3.client(
     "s3",
-    endpoint_url=MINIO_ENDPOINT,
-    aws_access_key_id=MINIO_ACCESS_KEY,
-    aws_secret_access_key=MINIO_SECRET_KEY,
+    endpoint_url=GARAGE_ENDPOINT,
+    aws_access_key_id=GARAGE_ACCESS_KEY,
+    aws_secret_access_key=GARAGE_SECRET_KEY,
     config=Config(signature_version="s3v4"),
-    region_name="us-east-1"
+    region_name="garage"
 )
 
 # function
@@ -121,21 +121,24 @@ def delete_bucket(bucket_name):
 
 # main exec
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--keep-data', action='store_true', default=True, help='Jangan hapus bucket setelah selesai')
+    parser.add_argument('--cleanup', action='store_true', help='Hapus bucket setelah demo')
+    args = parser.parse_args()
+
     print("=" * 70)
-    print("MINIO OPERATIONS - BATCH PROCESSING")
+    print("GARAGE S3 OPERATIONS - BATCH PROCESSING")
     print("Upload CSV Saham Indonesia ke Object Storage")
     print("=" * 70)
     
-    # path file CSV hasil scraping (dari 1a_scrape_historical.py)
     CSV_FILE = "data/saham_indonesia_historical.csv"
     
-    # cek apakah CSV sudah ada
     if not os.path.exists(CSV_FILE):
         print(f"\n File CSV belum ada!")
-        print(f"   Jalankan dulu: 1a_scrape_historical.py")
+        print(f"   Jalankan dulu: scrape_historical.py")
         exit(1)
     
-    # baca CSV untuk info
     df = pd.read_csv(CSV_FILE)
     print(f"\n File CSV ditemukan:")
     print(f"   Path: {CSV_FILE}")
@@ -143,36 +146,20 @@ if __name__ == "__main__":
     print(f"   Kolom: {list(df.columns)}")
     print(f"   Saham: {df['Ticker'].unique()}")
     
-   # create bucket
     print("\n" + "-" * 70)
     print("STEP 1: CREATE BUCKET")
     print("-" * 70)
     print(f"   Nama bucket: {BUCKET_NAME}")
     create_bucket(BUCKET_NAME)
     
-   # upload csv
     print("\n" + "-" * 70)
     print("STEP 2: UPLOAD CSV KE BUCKET")
     print("-" * 70)
-    
-    # Upload ke folder raw-data/
-    upload_csv_to_minio(
-        CSV_FILE,
-        BUCKET_NAME,
-        "raw-data/saham_indonesia_historical.csv"
-    )
-    
-    # Upload juga per saham (opsional, untuk organisasi)
+    upload_csv_to_minio(CSV_FILE, BUCKET_NAME, "raw-data/saham_indonesia_historical.csv")
     for ticker in df['Ticker'].unique():
         df_ticker = df[df['Ticker'] == ticker]
-        upload_dataframe_to_minio(
-            df_ticker,
-            BUCKET_NAME,
-            f"per-ticker/{ticker}_daily.csv"
-        )
+        upload_dataframe_to_minio(df_ticker, BUCKET_NAME, f"per-ticker/{ticker}_daily.csv")
     
-   
-    # list objects
     print("\n" + "-" * 70)
     print("STEP 3: LIST OBJECTS (Verifikasi)")
     print("-" * 70)
@@ -180,28 +167,27 @@ if __name__ == "__main__":
     list_objects(BUCKET_NAME, "raw-data/")
     list_objects(BUCKET_NAME, "per-ticker/")
   
-    # download demo
     print("\n" + "-" * 70)
     print("STEP 4: DOWNLOAD DEMO")
     print("-" * 70)
-    download_file(
-        BUCKET_NAME,
-        "raw-data/saham_indonesia_historical.csv",
-        "downloaded_saham_indonesia.csv"
-    )
+    download_file(BUCKET_NAME, "raw-data/saham_indonesia_historical.csv", "downloaded_saham_indonesia.csv")
     
-    # delete_bucket
-    print("\n" + "-" * 70)
-    print("STEP 5: DELETE BUCKET")
-    print("-" * 70)
-    
-    delete_bucket(BUCKET_NAME)
+    if args.cleanup:
+        print("\n" + "-" * 70)
+        print("STEP 5: DELETE BUCKET")
+        print("-" * 70)
+        delete_bucket(BUCKET_NAME)
+    else:
+        print("\n" + "-" * 70)
+        print("STEP 5: SKIP DELETE (--keep-data)")
+        print("-" * 70)
+        print("   Bucket & data tetap disimpan untuk pipeline berikutnya.")
     
     print("\n" + "=" * 70)
-    print("MINIO OPERATIONS SELESAI!")
+    print("GARAGE S3 OPERATIONS SELESAI!")
     print("=" * 70)
-    print("   1. Login page MinIO (localhost:9001)")
+    print("   1. Login page Garage WebUI (localhost:3909)")
     print("   2. Dashboard setelah login")
-    print("   3. Create bucket 'stock-indonesia-bucket'")
-    print("   4. Upload CSV ke bucket (lihat file di object browser)")
-    print("   5. Delete bucket (konfirmasi penghapusan)")
+    print("   3. Bucket 'stock-bucket' berisi:")
+    print("      - raw-data/saham_indonesia_historical.csv")
+    print("      - per-ticker/{ticker}_daily.csv")

@@ -1,22 +1,37 @@
-version: "3.8"
-
 services:
-  # MINIO 
-  minio:
-    image: minio/minio:latest
-    container_name: minio
+  # GARAGE S3 - Object storage (pengganti MinIO)
+  garage:
+    image: dxflrs/garage:v1.0.1
+    container_name: garage
     ports:
-      - "9000:9000"   # API S3
-      - "9001:9001"   # Web Console
-    environment:
-      MINIO_ROOT_USER: admin
-      MINIO_ROOT_PASSWORD: SuperSecretPassword123!
+      - "3900:3900"   # S3 API
+      - "3901:3901"   # RPC (internal)
+      - "3902:3902"   # S3 Web (static hosting)
+      - "3903:3903"   # Admin API
     volumes:
-      - minio-data:/data
-    command: server /data --console-address ":9001"
+      - ./config/garage/garage.toml:/etc/garage.toml:ro
+      - garage-meta:/var/lib/garage/meta
+      - garage-data:/var/lib/garage/data
     restart: unless-stopped
+    networks:
+      - stock-network
 
-  # KAFKA
+  garage-webui:
+    image: khairul169/garage-webui:latest
+    container_name: garage-webui
+    ports:
+      - "3909:3909"
+    environment:
+      API_BASE_URL: http://garage:3903
+      API_ADMIN_KEY: admin_token_rahasia123
+      S3_ENDPOINT_URL: http://garage:3900
+    depends_on:
+      - garage
+    restart: unless-stopped
+    networks:
+      - stock-network
+
+  # KAFKA & ZOOKEEPER - Message broker untuk stream processing
   zookeeper:
     image: confluentinc/cp-zookeeper:latest
     container_name: zookeeper
@@ -25,6 +40,9 @@ services:
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+    restart: unless-stopped
+    networks:
+      - stock-network
 
   kafka:
     image: confluentinc/cp-kafka:latest
@@ -34,13 +52,18 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:29092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_INTERNAL://0.0.0.0:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     depends_on:
       - zookeeper
     restart: unless-stopped
+    networks:
+      - stock-network
 
-    # SPARK
+  # SPARK - Distributed processing engine
   spark-master:
     image: bitnami/spark:latest
     container_name: spark-master
@@ -48,37 +71,158 @@ services:
       - "8080:8080"   # Spark UI
       - "7077:7077"
     environment:
-      - SPARK_MODE=master
-      - SPARK_RPC_AUTHENTICATION_ENABLED=no
-      - SPARK_RPC_ENCRYPTION_ENABLED=no
-      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
-      - SPARK_SSL_ENABLED=no
+      SPARK_MODE: master
     volumes:
-      - spark-data:/bitnami/spark
+      - spark-data:/bitnami
+    restart: unless-stopped
+    networks:
+      - stock-network
 
   spark-worker:
     image: bitnami/spark:latest
     container_name: spark-worker
     environment:
-      - SPARK_MODE=worker
-      - SPARK_MASTER_URL=spark://spark-master:7077
-      - SPARK_WORKER_MEMORY=2G
-      - SPARK_WORKER_CORES=2
+      SPARK_MODE: worker
+      SPARK_MASTER_URL: spark://spark-master:7077
+      SPARK_WORKER_MEMORY: 2G
+      SPARK_WORKER_CORES: 2
     depends_on:
       - spark-master
     volumes:
-      - spark-data:/bitnami/spark
+      - spark-data:/bitnami
+    restart: unless-stopped
+    networks:
+      - stock-network
 
-  # GRAFANA + PROMETHEUS
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: prometheus
+  # TRINO + HIVE METASTORE - SQL query engine di atas S3
+  postgres-hms:
+    image: postgres:16-alpine
+    container_name: postgres-hms
     ports:
-      - "9090:9090"
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: hive
+      POSTGRES_PASSWORD: hive
+      POSTGRES_DB: metastore
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus-data:/prometheus
+      - postgres-hms-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - stock-network
 
+  hive-metastore:
+    image: apache/hive:4.0.0
+    container_name: hive-metastore
+    ports:
+      - "9083:9083"
+    environment:
+      SERVICE: metastore
+      SERVICE_OPTS: "-Djavax.jdo.option.ConnectionURL=jdbc:postgresql://postgres-hms:5432/metastore -Djavax.jdo.option.ConnectionDriverName=org.postgresql.Driver -Djavax.jdo.option.ConnectionUserName=hive -Djavax.jdo.option.ConnectionPassword=hive"
+    volumes:
+      - ./config/hive/metastore-site.xml:/opt/hive/conf/metastore-site.xml
+    depends_on:
+      - postgres-hms
+    restart: unless-stopped
+    networks:
+      - stock-network
+
+  trino:
+    image: trinodb/trino:latest
+    container_name: trino
+    ports:
+      - "8082:8082"
+    volumes:
+      - ./config/trino/config.properties:/etc/trino/config.properties
+      - ./config/trino/node.properties:/etc/trino/node.properties
+      - ./config/trino/jvm.config:/etc/trino/jvm.config
+      - ./config/trino/catalog:/etc/trino/catalog
+    depends_on:
+      - hive-metastore
+      - garage
+    restart: unless-stopped
+    networks:
+      - stock-network
+
+  # MLFLOW - ML lifecycle tracking
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.16.0
+    container_name: mlflow
+    ports:
+      - "5000:5000"
+    command: >
+      mlflow server
+      --host 0.0.0.0 --port 5000
+      --backend-store-uri sqlite:///mlflow/mlflow.db
+      --default-artifact-root s3://stock-bucket/mlflow/
+    environment:
+      MLFLOW_S3_ENDPOINT_URL: http://garage:3900
+      AWS_ACCESS_KEY_ID: GKc98624849db70446555a905b
+      AWS_SECRET_ACCESS_KEY: 934f97fb29df4f1da215e689c57ab5b42c4e42798841961e4df77d4d3ae6c828
+      AWS_DEFAULT_REGION: garage
+    volumes:
+      - mlflow-data:/mlflow
+    depends_on:
+      - garage
+    restart: unless-stopped
+    networks:
+      - stock-network
+
+  # PREFECT - Workflow orchestration (pengganti Airflow)
+  prefect-server:
+    image: prefecthq/prefect:3.1-python3.11
+    container_name: prefect-server
+    ports:
+      - "4200:4200"
+    command: prefect server start --port 4200
+    volumes:
+      - prefect-data:/root/.prefect
+    restart: unless-stopped
+    networks:
+      - stock-network
+
+  prefect-agent:
+    build: ./prefect
+    container_name: prefect-agent
+    command: >
+      sh -c "prefect config set PREFECT_API_URL=http://prefect-server:4200/api &&
+             prefect agent start -q default"
+    volumes:
+      - ./prefect/flows:/opt/prefect/flows
+      - ./batch_processing:/opt/prefect/batch_processing
+      - ./ml_integration:/opt/prefect/ml_integration
+      - ./dashboard_monitoring:/opt/prefect/dashboard_monitoring
+      - ./scripts:/opt/prefect/scripts
+      - ./config:/opt/prefect/config
+      - ./requirements.txt:/opt/prefect/requirements.txt
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+      GARAGE_ENDPOINT: http://garage:3900
+      GARAGE_ACCESS_KEY: GKc98624849db70446555a905b
+      GARAGE_SECRET_KEY: 934f97fb29df4f1da215e689c57ab5b42c4e42798841961e4df77d4d3ae6c828
+      GARAGE_BUCKET: stock-bucket
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_MAIL_FROM: ${SMTP_MAIL_FROM:-}
+      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-team@example.com}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      INFLUXDB_URL: http://influxdb:8086
+      INFLUXDB_TOKEN: ${INFLUXDB_TOKEN:-}
+      INFLUXDB_ORG: stock-org
+      INFLUXDB_BUCKET: pipeline-metrics
+    depends_on:
+      - prefect-server
+      - garage
+      - kafka
+    restart: unless-stopped
+    networks:
+      - stock-network
+
+  # GRAFANA - Dashboard visualisasi
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
@@ -89,18 +233,66 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin
     volumes:
       - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+      - influxdb
+    restart: unless-stopped
+    networks:
+      - stock-network
 
+  # INFLUXDB - Time-series untuk metrics monitoring
   influxdb:
-    image: influxdb:latest
+    image: influxdb:2
     container_name: influxdb
     ports:
       - "8086:8086"
     volumes:
       - influxdb-data:/var/lib/influxdb2
+    restart: unless-stopped
+    networks:
+      - stock-network
+
+  # PROMETHEUS - Metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./dashboard_monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    restart: unless-stopped
+    networks:
+      - stock-network
+
+  # ALERTMANAGER - Notifikasi (Email + Telegram)
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./dashboard_monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+    restart: unless-stopped
+    networks:
+      - stock-network
 
 volumes:
-  minio-data:
+  garage-meta:
+  garage-data:
   spark-data:
+  postgres-hms-data:
+  mlflow-data:
+  prefect-data:
   prometheus-data:
   grafana-data:
   influxdb-data:
+
+networks:
+  stock-network:
+    driver: bridge

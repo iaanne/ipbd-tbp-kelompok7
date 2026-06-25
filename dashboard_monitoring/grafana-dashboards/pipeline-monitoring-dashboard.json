@@ -1,0 +1,128 @@
+{
+  "dashboard": {
+    "title": "🔧 Pipeline Monitoring Dashboard",
+    "description": "Monitoring pipeline data: log execution, job status, resource usage. Memantau severity log (INFO, DEBUG, WARNING, FATAL).",
+    "tags": ["monitoring", "pipeline", "airflow", "infra"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Airflow Job Status (24h)",
+        "type": "stat",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "sum(airflow_dag_run_status{status=\"success\"})"
+          }
+        ],
+        "description": "Jumlah DAG run sukses dalam 24 jam terakhir."
+      },
+      {
+        "id": 2,
+        "title": "Failed Tasks (24h)",
+        "type": "stat",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "sum(airflow_task_run_status{status=\"failed\"})"
+          }
+        ],
+        "description": "Jumlah task gagal dalam 24 jam. Jika > 0, perlu investigasi."
+      },
+      {
+        "id": 3,
+        "title": "Log Severity Distribution",
+        "type": "piechart",
+        "datasource": "InfluxDB",
+        "targets": [
+          {
+            "query": "from(bucket: \"pipeline-logs\") |> range(start: -1d) |> filter(fn: (r) => r._measurement == \"log_count\") |> group(columns: [\"severity\"]) |> sum()"
+          }
+        ],
+        "description": "Distribusi severity log pipeline: INFO, DEBUG, WARNING, FATAL. Penting untuk memantau kesehatan pipeline."
+      },
+      {
+        "id": 4,
+        "title": "Spark Job Duration",
+        "type": "timeseries",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "spark_job_duration_seconds"
+          }
+        ],
+        "description": "Durasi job Spark dalam detik. Lonjakan durasi bisa menandakan bottleneck."
+      },
+      {
+        "id": 5,
+        "title": "Kafka Message Lag",
+        "type": "timeseries",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "kafka_consumer_lag"
+          }
+        ],
+        "description": "Consumer lag Kafka. Lag tinggi menandakan stream processing tidak dapat mengejar produksi data."
+      },
+      {
+        "id": 6,
+        "title": "MinIO Storage Usage",
+        "type": "gauge",
+        "datasource": "Prometheus",
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes"
+          }
+        },
+        "targets": [
+          {
+            "expr": "minio_bucket_usage_total_bytes{bucket=\"stock-indonesia-bucket\"}"
+          }
+        ],
+        "description": "Total penyimpanan yang digunakan di MinIO bucket."
+      },
+      {
+        "id": 7,
+        "title": "Data Freshness (Last Batch)",
+        "type": "stat",
+        "datasource": "InfluxDB",
+        "targets": [
+          {
+            "query": "from(bucket: \"pipeline-metrics\") |> range(start: -7d) |> filter(fn: (r) => r._measurement == \"batch\" and r._field == \"last_run\") |> last()"
+          }
+        ],
+        "description": "Timestamp batch terakhir yang sukses. Jika > 24 jam, pipeline mungkin bermasalah."
+      },
+      {
+        "id": 8,
+        "title": "Data Quality Score",
+        "type": "gauge",
+        "datasource": "InfluxDB",
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": null},
+                {"color": "yellow", "value": 80},
+                {"color": "green", "value": 95}
+              ]
+            }
+          }
+        },
+        "targets": [
+          {
+            "query": "from(bucket: \"pipeline-metrics\") |> range(start: -1d) |> filter(fn: (r) => r._measurement == \"data_quality\" and r._field == \"score\") |> last()"
+          }
+        ],
+        "description": "Skor kualitas data berdasarkan null rate, type errors, dan duplicate rows."
+      }
+    ],
+    "links": [],
+    "version": 1
+  },
+  "overwrite": true
+}

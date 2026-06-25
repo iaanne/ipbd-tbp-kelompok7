@@ -1,0 +1,20 @@
+groups:
+  - name: pipeline_alerts
+    rules:
+      - alert: PipelineDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "{{ $labels.job }} has been unreachable for more than 1 minute."
+
+      - alert: BatchJobFailed
+        expr: time() - batch_job_last_success > 86400
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Batch job hasn't succeeded in 24h"
+          description: "Last successful batch run was more than 24 hours ago."

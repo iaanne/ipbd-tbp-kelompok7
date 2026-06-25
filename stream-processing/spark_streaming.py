@@ -1,13 +1,18 @@
-# baca data real-time dari Kafka
+import os
 from pyspark.sql import SparkSession
-from pspark.sql.functions import *
+from pyspark.sql.functions import *
 from pyspark.sql.types import *
+
+GARAGE_ENDPOINT = os.getenv('GARAGE_ENDPOINT', 'http://garage:3900')
+GARAGE_ACCESS_KEY = os.getenv('GARAGE_ACCESS_KEY', 'GKc98624849db70446555a905b')
+GARAGE_SECRET_KEY = os.getenv('GARAGE_SECRET_KEY', '934f97fb29df4f1da215e689c57ab5b42c4e42798841961e4df77d4d3ae6c828')
+KAFKA_SERVERS = os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'localhost:9092')
 
 spark = SparkSession.builder \
     .appName("StockStreamProcessing") \
-    .config("spark.hadoop.fs.s3a.endpoint", "http://localhost:9000") \
-    .config("spark.hadoop.fs.s3a.access.key", "admin") \
-    .config("spark.hadoop.fs.s3a.secret.key", "SuperSecretPassword123!") \
+    .config("spark.hadoop.fs.s3a.endpoint", GARAGE_ENDPOINT) \
+    .config("spark.hadoop.fs.s3a.access.key", GARAGE_ACCESS_KEY) \
+    .config("spark.hadoop.fs.s3a.secret.key", GARAGE_SECRET_KEY) \
     .config("spark.hadoop.fs.s3a.path.style.access", "true") \
     .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
     .getOrCreate()
@@ -26,9 +31,9 @@ schema = StructType([
 # baca stream dari Kafka
 df_stream = spark.readStream \
     .format("kafka") \
-    .option("kafka.bootstrap.servers", "localhost:9092") \
+    .option("kafka.bootstrap.servers", KAFKA_SERVERS) \
     .option("subscribe", "stock-stream-topic") \
-    .option("stratingOffsets", "latest") \
+    .option("startingOffsets", "latest") \
     .load()
 
 # parse JSON
@@ -38,7 +43,7 @@ df_parsed = df_stream.select(
 
 # transformasi StringTypeEAM (real time aggregation)
 df_agg = df_parsed \
-    .withColumn("event_time", col("timestamp".cast("timestamp")) \
+    .withColumn("event_time", col("timestamp").cast("timestamp")) \
     .withWatermark("event_time", "10 minutes") \
     .groupBy(
         window(col("event_time"), "5 minutes"),
