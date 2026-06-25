@@ -6,8 +6,8 @@ Proyek **Infrastruktur dan Platform Big Data** (IPBD) untuk menganalisis pergera
 ## Anggota Tim
 | Nama | NIM | Peran |
 |------|-----|-------|
-| Adrian Farrel Aziz Yatyoga | L0224040 | Data Engineer & Infrastructure |
-| Michael Christian Shan Geraldo | L0224035 | ML Engineer & Analytics |
+| Adrian Farrel Aziz Yatyoga | L0224040 | Data Engineer, Infrastructure & ML Engineer  |
+| Michael Christian Shan Geraldo | L0224035 | Analytics |
 
 ## Tujuan Bisnis
 Memprediksi kapan IHSG benar-benar menyentuh titik 6000 (minimal 2 hari berturut-turut) dan melihat potensi market yang masih sehat untuk investasi.
