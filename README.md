@@ -1,9 +1,7 @@
-# IPBD Stock Pipeline - Real-time Ticker & Prediksi Pergerakan Harga Saham
+# IPBD Stock Pipeline
+**Real-time Ticker & Prediksi Pergerakan Harga Saham**
 
 Proyek **Infrastruktur dan Platform Big Data** (IPBD) untuk menganalisis pergerakan IHSG dan memprediksi kapan menyentuh titik 6000 menggunakan pipeline big data end-to-end.
-
-## Tujuan Bisnis
-Memprediksi kapan IHSG benar-benar menyentuh titik 6000 (minimal 2 hari berturut-turut) dan melihat potensi market yang masih sehat untuk investasi.
 
 ## Anggota Tim
 | Nama | NIM | Peran |
@@ -11,114 +9,186 @@ Memprediksi kapan IHSG benar-benar menyentuh titik 6000 (minimal 2 hari berturut
 | Adrian Farrel Aziz Yatyoga | L0224040 | Data Engineer & Infrastructure |
 | Michael Christian Shan Geraldo | L0224035 | ML Engineer & Analytics |
 
+## Tujuan Bisnis
+Memprediksi kapan IHSG benar-benar menyentuh titik 6000 (minimal 2 hari berturut-turut) dan melihat potensi market yang masih sehat untuk investasi.
+
 ## Struktur Folder
 ```
-├── batch_processing/          # Batch Processing (scrape, Garage S3, Spark ETL)
-│   ├── scrape_historical.py   # Scraping YFinance
-│   ├── garage_operations.py   # CRUD Garage S3 (ex-minio_operations)
-│   ├── spark_batch_etl.py     # Spark ETL: SMA, Volatility, dll.
-│   └── data/                  # Data CSV
-├── stream-processing/         # Stream Processing
-│   ├── kafka_producer.py      # Kafka producer real-time
-│   └── spark_streaming.py     # Spark Structured Streaming
-├── ml_integration/            # ML Pipeline
-│   ├── feature_engineering.py # 18 fitur teknis
-│   ├── train_model.py         # KMeans clustering
-│   ├── batch_inference.py     # Batch prediction + enrich
-│   ├── realtime_prediction.py # Real-time prediction
-│   ├── lstm_train.py          # LSTM time series training
-│   └── lstm_predict.py        # LSTM prediction + IHSG 6000 estimator
-├── prefect/                   # Orchestration (pengganti Airflow)
-│   ├── flows/
-│   │   ├── batch_pipeline.py
-│   │   ├── ml_training.py
-│   │   ├── data_quality_flow.py
-│   │   ├── stream_monitor.py
-│   │   ├── push_metrics.py
-│   │   └── alert_notify.py
-│   ├── Dockerfile
-│   └── requirements.txt
-├── dashboard_monitoring/      # Monitoring & Dashboard
-│   ├── prometheus/
-│   ├── alertmanager/
-│   ├── grafana-dashboards/
-│   ├── data_quality.py
-│   └── masking_pii.py
-├── config/                    # Konfigurasi Infrastruktur
-│   ├── garage/garage.toml
-│   ├── trino/
-│   ├── hive/
-│   └── postgresql/
-├── scripts/                   # Demo scripts
-│   ├── run_batch_demo.sh      # Batch 10x auto-run
-│   └── run_all_demo.sh        # Full pipeline demo
-├── docs/                      # Dokumentasi
-│   ├── ARCHITECTURE.md        # Diagram arsitektur Mermaid
-│   └── REPORT.md              # Laporan lengkap
+├── batch_processing/          # Scrape YFinance, Garage S3 CRUD, Spark Batch ETL
+├── stream-processing/         # Kafka Producer + Spark Structured Streaming
+├── ml_integration/            # Feature Eng, KMeans, LSTM, Prediksi
+├── prefect/                   # Orchestration flows (pengganti Airflow)
+├── dashboard_monitoring/      # Grafana, Prometheus, Alertmanager, PII masking
+├── config/                    # Konfigurasi Garage, Trino, Hive, PostgreSQL
+├── scripts/                   # Pipeline scripts (run_pipeline.sh dll)
+├── docs/                      # Dokumentasi arsitektur & laporan
 ├── docker-compose.yml         # Semua service container
-├── .env.example
+├── .env.example               # Contoh konfigurasi environment
 └── README.md
 ```
 
-## Arsitektur
-Lihat [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) untuk diagram arsitektur lengkap.
-
 ## Prerequisites
-- Docker & Docker Compose
-- Python 3.11+
+- **Docker & Docker Compose** (untuk service: Garage, Kafka, Spark, Trino, dll)
+- **Python 3.11+** (untuk pipeline scripts)
+- Install dependencies: `pip install -r requirements.txt`
 
-## Pembagian Detail
-**Ian – Data Engineer & Infrastructure:**
-- Perancangan Arsitektur Pipeline (desain end-to-end)
-- Batch Processing (Spark Batch ETL: SMA, Volatility, indikator teknikal)
-- Stream Processing (Kafka + Spark Structured Streaming)
-- MinIO Operations (create bucket, upload CSV, delete bucket + screenshot)
-- Keamanan Data (MinIO auth, bucket policies, access control)
+## Pipeline Stages
 
-**Aldo – ML Engineer & Analytics:**
-- Integrasi Machine Learning (feature engineering, training, batch inference, real-time prediction API)
-- Visualisasi & Dashboard (Grafana: real-time charts, ML predictions, stock trends)
-- Monitoring & Logging (Prometheus metrics, pipeline performance tracking)
-- Alerting System (Grafana alert rules, Alertmanager, anomaly notifications)
-- Governance Big Data (data quality checks, metadata, audit trail, compliance)
+```
+PHASE 0: SETUP INFRASTRUKTUR
+  docker-compose up -d  →  Garage, Kafka, Spark, Trino, Prefect, Grafana, dll
 
-## Cara Menjalankan
+PHASE 1: BATCH PIPELINE
+  Scrape YFinance  →  Garage S3  →  Spark ETL (SMA, Volatility)
 
-### 1. Setup Infrastructure
+PHASE 2: ML PIPELINE
+  Feature Engineering (18 fitur)  →  KMeans Clustering  →  LSTM Time Series
+
+PHASE 3: STREAM PIPELINE (real-time)
+  Kafka Producer  →  Spark Streaming  →  Real-time ML Prediction
+
+PHASE 4: GOVERNANCE & MONITORING
+  Data Quality  →  PII Masking  →  Grafana Dashboard  →  Alerting
+```
+
+---
+
+## CARA CEPAT (Pakai .sh Script)
+
+Semua script ada di folder `scripts/`. Jalankan dari root project:
+
+### 1. Full Pipeline (Semua Sekaligus)
 ```bash
-# Clone repo
+# Setup → Batch → ML → Data Quality → Summary
+bash scripts/run_pipeline.sh
+```
+
+### 2. Batch Pipeline Saja
+```bash
+bash scripts/run_batch.sh
+```
+
+### 3. ML Pipeline Saja
+```bash
+bash scripts/run_ml.sh
+```
+
+### 4. Stream Processing (butuh 2 terminal)
+```bash
+# Terminal 1: Kafka Producer
+bash scripts/run_stream.sh producer
+
+# Terminal 2: Spark Streaming
+bash scripts/run_stream.sh streaming
+
+# Terminal 3 (opsional): Real-time ML Prediction
+bash scripts/run_stream.sh realtime-ml
+```
+
+### 5. Demo 10x Run (Bukti ke Dosen)
+```bash
+# Batch pipeline jalan 10x otomatis + log
+bash scripts/run_batch_demo.sh
+
+# Full pipeline demo: Batch → DQ → PII → ML → Inventory
+bash scripts/run_all_demo.sh
+```
+
+---
+
+## CARA MANUAL (Step-by-Step)
+
+### Phase 0: Setup Infrastructure
+```bash
+# 1. Clone & masuk folder
 git clone git@github.com:iaanne/ipbd-tbp-kelompok7.git
 cd ipbd-tbp-kelompok7
 
-# Copy environment config
+# 2. Copy environment
 cp .env.example .env
 
-# Install Python dependencies
+# 3. Install dependencies
 pip install -r requirements.txt
 
-# Jalankan semua service
+# 4. Jalankan semua service Docker
 docker-compose up -d
+
+# 5. Setup Garage S3 (bucket, key, policy)
+bash config/garage/setup-garage.sh
 ```
 
-### 2. Access Services
-| Service | URL | Login |
-|---------|-----|-------|
-| Garage WebUI | http://localhost:3909 | admin_token_rahasia123 |
-| Spark UI | http://localhost:8080 | - |
-| Prefect | http://localhost:4200 | - |
-| Trino | http://localhost:8082 | - |
-| MLflow | http://localhost:5000 | - |
-| Grafana | http://localhost:3000 | admin / admin |
-| Prometheus | http://localhost:9090 | - |
-| InfluxDB | http://localhost:8086 | - |
+### Phase 1: Batch Pipeline
+```bash
+# Step 1: Scrape data historis dari YFinance (6 saham)
+cd batch_processing
+python scrape_historical.py
+# Output: data/saham_indonesia_historical.csv
 
-### 3. Register Prefect Flows
+# Step 2: Upload CSV ke Garage S3 (buat bucket + upload)
+python minio_operations.py --keep-data
+
+# Step 3: Spark Batch ETL (hitung SMA 7/30, Volatility, Price Range)
+python spark_batch_etl.py
+# Output: s3://stock-bucket/processed-data/features/
+
+# Step 4 (opsional): Data Quality Check
+cd ../dashboard_monitoring
+python data_quality.py
+```
+
+### Phase 2: ML Pipeline
+```bash
+# Step 1: Feature Engineering (18 fitur teknikal)
+cd ml_integration
+python feature_engineering.py
+# Output: s3://stock-bucket/features/
+
+# Step 2: Training KMeans Clustering (4 cluster risiko)
+python train_model.py
+# Output: Model + predictions ke s3://stock-bucket/models/ & predictions/
+
+# Step 3: Batch Inference + Enrich Data
+python batch_inference.py
+# Output: Enriched predictions + IHSG analysis (estimasi hari ke 6000)
+
+# Step 4: Training LSTM Time Series
+python lstm_train.py
+# Output: Model .h5 ke s3://stock-bucket/models/ + MLflow tracking
+
+# Step 5: LSTM Prediksi + Estimasi Hari ke 6000
+python lstm_predict.py
+# Output: Prediksi 7 hari ke depan + estimasi kapan IHSG tembus 6000
+```
+
+### Phase 3: Stream Processing (Real-time)
+```bash
+# Terminal 1: Kafka Producer (stream data real-time dari YFinance)
+cd stream-processing
+python kafka_producer.py
+
+# Terminal 2: Spark Streaming (aggregate 5 menit dari Kafka)
+python spark_streaming.py
+
+# Terminal 3 (opsional): Real-time ML Prediction dari Kafka
+cd ../ml_integration
+python realtime_prediction.py
+```
+
+### Phase 4: Data Governance
+```bash
+# PII Masking Demo (Email, Nama, Telepon, Alamat, Saldo)
+cd dashboard_monitoring
+python masking_pii.py
+# Output: Original + masked CSV ke s3://stock-bucket/pii-sample/
+```
+
+### Register Prefect Orchestration (Opsional)
 ```bash
 # Batch pipeline (setiap hari kerja jam 18:00)
 prefect deployment build prefect/flows/batch_pipeline.py:batch_flow \
   --name "Batch Pipeline" --cron "0 18 * * 1-5"
 
-# ML Training (Sen/Rab/Jum 06:00)
+# ML Training (Senin/Rabu/Jumat 06:00)
 prefect deployment build prefect/flows/ml_training.py:ml_training_flow \
   --name "ML Training" --cron "0 6 * * 1,3,5"
 
@@ -127,36 +197,19 @@ prefect deployment build prefect/flows/data_quality_flow.py:data_quality_flow \
   --name "Data Quality" --cron "0 7 * * 1-5"
 ```
 
-### 4. Run Demo (Bukti Running 3x/4x/10x)
-```bash
-bash scripts/run_batch_demo.sh    # Batch 10x auto-run + log
-bash scripts/run_all_demo.sh      # Full pipeline demo
-```
+---
 
-### 5. Manual Run
-```bash
-# Batch
-cd batch_processing && python scrape_historical.py
-
-# Upload ke Garage
-python batch_processing/garage_operations.py --keep-data
-
-# Spark ETL
-python batch_processing/spark_batch_etl.py
-
-# Stream (2 terminal)
-cd stream-processing && python kafka_producer.py
-cd stream-processing && python spark_streaming.py
-
-# ML
-cd ml_integration && python feature_engineering.py
-cd ml_integration && python train_model.py
-cd ml_integration && python lstm_train.py
-cd ml_integration && python lstm_predict.py
-
-# PII Masking Demo
-python dashboard_monitoring/masking_pii.py
-```
+## Access Services
+| Service | URL | Login |
+|---------|-----|-------|
+| Garage WebUI | http://localhost:3909 | admin_token_rahasia123 |
+| Spark UI | http://localhost:8080 | - |
+| Prefect UI | http://localhost:4200 | - |
+| Trino SQL | http://localhost:8082 | - |
+| MLflow | http://localhost:5000 | - |
+| Grafana | http://localhost:3000 | admin / admin |
+| Prometheus | http://localhost:9090 | - |
+| InfluxDB | http://localhost:8086 | - |
 
 ## Tech Stack
 - **Data Source**: YFinance, IDX
@@ -175,7 +228,7 @@ Script `dashboard_monitoring/masking_pii.py` mendemonstrasikan masking data prib
 - Email → partial masking (b****@gmail.com)
 - Nama → partial masking (Budi S***)
 - Telepon → partial masking (0812****890)
-- Alamat → generalize
+- Alamat → generalize (Jalan ***** No.X, Kota)
 - Saldo → kategorisasi (< 50jt, 50-100jt, > 100jt)
 - Data fiktif disimpan di `stock-bucket/pii-sample/`
 
