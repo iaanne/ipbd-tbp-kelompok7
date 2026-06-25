@@ -211,6 +211,32 @@ prefect deployment build prefect/flows/data_quality_flow.py:data_quality_flow \
 | Prometheus | http://localhost:9090 | - |
 | InfluxDB | http://localhost:8086 | - |
 
+## Streamlit Dashboard
+Dashboard visualisasi interaktif untuk monitoring pipeline dan analisis saham.
+
+### Cara Menjalankan
+```bash
+# Aktifkan virtual environment (kalau pake venv)
+source venv/bin/activate
+
+# Atau install langsung
+pip install -r requirements.txt
+
+# Jalankan Streamlit
+streamlit run dashboard_monitoring/streamlit_app.py
+# → Buka http://localhost:8501
+```
+
+### Halaman Dashboard
+| Halaman | Fitur |
+|---------|-------|
+| 📈 IHSG Overview | Chart Close + SMA 7/30, Volume, Volatilitas, metric cards |
+| 📊 Stock Analysis | Perbandingan harga antar saham, bar chart volume, filter saham |
+| 🤖 ML Predictions | Pie chart cluster KMeans, scatter plot Return vs Volatility, LSTM prediction 7 hari, estimasi IHSG 6000 |
+| 📋 Data Quality | Quality report, metadata schema, audit trail log |
+| 🔐 PII Masking | Side-by-side original vs masked data |
+| 📦 File Inventory | List semua file di Garage S3 per prefix |
+
 ## Tech Stack
 - **Data Source**: YFinance, IDX
 - **Storage**: Garage S3 (S3-compatible, Rust-based)
