@@ -9,23 +9,27 @@ from io import BytesIO
 from datetime import datetime
 import logging
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(asctime)s - %(name)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-MINIO_ENDPOINT = os.getenv('MINIO_ENDPOINT', 'http://localhost:9000')
-MINIO_ACCESS_KEY = os.getenv('MINIO_ACCESS_KEY', 'admin')
-MINIO_SECRET_KEY = os.getenv('MINIO_SECRET_KEY', 'SuperSecretPassword123!')
-BUCKET = 'stock-indonesia-bucket'
+from botocore.config import Config
 
-def get_minio_client():
+GARAGE_ENDPOINT = os.getenv('GARAGE_ENDPOINT', 'http://localhost:3900')
+GARAGE_ACCESS_KEY = os.getenv('GARAGE_ACCESS_KEY', 'GKc98624849db70446555a905b')
+GARAGE_SECRET_KEY = os.getenv('GARAGE_SECRET_KEY', '934f97fb29df4f1da215e689c57ab5b42c4e42798841961e4df77d4d3ae6c828')
+BUCKET = os.getenv('GARAGE_BUCKET', 'stock-bucket')
+
+def get_garage_client():
     return boto3.client(
         's3',
-        endpoint_url=MINIO_ENDPOINT,
-        aws_access_key_id=MINIO_ACCESS_KEY,
-        aws_secret_access_key=MINIO_SECRET_KEY,
+        endpoint_url=GARAGE_ENDPOINT,
+        aws_access_key_id=GARAGE_ACCESS_KEY,
+        aws_secret_access_key=GARAGE_SECRET_KEY,
+        config=Config(signature_version='s3v4'),
+        region_name='garage'
     )
 
-def load_model_from_minio(client, model_key=None):
+def load_model_from_garage(client, model_key=None):
     objs = client.list_objects_v2(Bucket=BUCKET, Prefix='models/')
     model_files = sorted(
         [o for o in objs.get('Contents', []) if o['Key'].endswith('.joblib')],
@@ -85,7 +89,7 @@ def enrich_prediction(ticker, row, cluster, model_info):
     }
     return enriched
 
-def save_prediction_to_minio(client, enriched):
+def save_prediction_to_garage(client, enriched):
     date_str = datetime.now().strftime('%Y%m%d')
     key = f"predictions/realtime/{date_str}/{enriched['ticker']}_{datetime.now().strftime('%H%M%S')}.json"
     client.put_object(
@@ -96,11 +100,11 @@ def save_prediction_to_minio(client, enriched):
     return key
 
 if __name__ == '__main__':
-    client = get_minio_client()
+    client = get_garage_client()
 
     model_info = load_model_info(client)
     feature_names = model_info['feature_names'] if model_info else []
-    model, model_key = load_model_from_minio(client)
+    model, model_key = load_model_from_garage(client)
 
     logger.info(f"Model loaded: {model_key}")
     logger.info(f"Feature names: {feature_names}")
@@ -130,7 +134,7 @@ if __name__ == '__main__':
         cluster = predict_stock_cluster(model, features, feature_names)
         enriched = enrich_prediction(ticker, data, cluster, model_info)
 
-        file_key = save_prediction_to_minio(client, enriched)
+        file_key = save_prediction_to_garage(client, enriched)
         logger.info(f"{ticker} -> Cluster {cluster} (Risk: {enriched['risk_level']})")
 
         enriched['type'] = 'prediction'

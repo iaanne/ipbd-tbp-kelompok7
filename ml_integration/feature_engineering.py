@@ -6,20 +6,24 @@ from io import StringIO, BytesIO
 from datetime import datetime, timedelta
 import logging
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(asctime)s - %(name)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-MINIO_ENDPOINT = os.getenv('MINIO_ENDPOINT', 'http://localhost:9000')
-MINIO_ACCESS_KEY = os.getenv('MINIO_ACCESS_KEY', 'admin')
-MINIO_SECRET_KEY = os.getenv('MINIO_SECRET_KEY', 'SuperSecretPassword123!')
-BUCKET = 'stock-indonesia-bucket'
+from botocore.config import Config
 
-def get_minio_client():
+GARAGE_ENDPOINT = os.getenv('GARAGE_ENDPOINT', 'http://localhost:3900')
+GARAGE_ACCESS_KEY = os.getenv('GARAGE_ACCESS_KEY', 'GKc98624849db70446555a905b')
+GARAGE_SECRET_KEY = os.getenv('GARAGE_SECRET_KEY', '934f97fb29df4f1da215e689c57ab5b42c4e42798841961e4df77d4d3ae6c828')
+BUCKET = os.getenv('GARAGE_BUCKET', 'stock-bucket')
+
+def get_garage_client():
     return boto3.client(
         's3',
-        endpoint_url=MINIO_ENDPOINT,
-        aws_access_key_id=MINIO_ACCESS_KEY,
-        aws_secret_access_key=MINIO_SECRET_KEY,
+        endpoint_url=GARAGE_ENDPOINT,
+        aws_access_key_id=GARAGE_ACCESS_KEY,
+        aws_secret_access_key=GARAGE_SECRET_KEY,
+        config=Config(signature_version='s3v4'),
+        region_name='garage'
     )
 
 def load_historical_data(client):
@@ -50,9 +54,9 @@ def engineer_features(df):
         g['Volatility_5d'] = g['Returns_1d'].rolling(5).std()
         g['Volume_Change'] = g['Volume'].pct_change()
         g['Price_Range'] = g['High'] - g['Low']
-        g['Price_Range_Pct'] = g['Price_Range'] / g['Open']
-        g['Close_Open_Ratio'] = g['Close'] / g['Open']
-        g['High_Low_Ratio'] = g['High'] / g['Low']
+        g['Price_Range_Pct'] = g['Price_Range'] / g['Open'].replace(0, np.nan)
+        g['Close_Open_Ratio'] = g['Close'] / g['Open'].replace(0, np.nan)
+        g['High_Low_Ratio'] = g['High'] / g['Low'].replace(0, np.nan)
         g['Lag_1_Close'] = g['Close'].shift(1)
         g['Lag_2_Close'] = g['Close'].shift(2)
         g['Lag_3_Close'] = g['Close'].shift(3)
@@ -65,6 +69,7 @@ def engineer_features(df):
 
     result = pd.concat(features, ignore_index=True)
     result = result.dropna(subset=['Returns_1d', 'Volatility_5d'])
+    result = result.replace([np.inf, -np.inf], np.nan).dropna(subset=['Returns_1d', 'Volatility_5d'])
 
     return result
 
@@ -74,7 +79,7 @@ def compute_rsi(series, period=14):
     loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
     rs = gain / loss.replace(0, np.nan)
     rsi = 100 - (100 / (1 + rs))
-    return rsi
+    return rsi.replace([np.inf, -np.inf], 50)
 
 def upload_features(client, df):
     buffer = BytesIO()
@@ -87,7 +92,7 @@ def upload_features(client, df):
     return f"s3://{BUCKET}/{key}"
 
 if __name__ == '__main__':
-    client = get_minio_client()
+    client = get_garage_client()
     raw_df = load_historical_data(client)
     logger.info(f"Loaded {len(raw_df)} rows of historical data")
 

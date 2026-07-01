@@ -1,4 +1,7 @@
-# data historis dari yfinance 
+import logging
+logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(asctime)s - %(message)s')
+logger = logging.getLogger(__name__)
+
 import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
@@ -17,23 +20,23 @@ SAHAM_LIST = {
 END_DATE = datetime.now()
 START_DATE = END_DATE - timedelta(days=365)
 
-print("=" * 60)
-print("SCRAPING DATA HISTORIS SAHAM INDONESIA")
-print("=" * 60)
-print(f"Periode: {START_DATE.date()} s/d {END_DATE.date()}")
-print("-" * 60)
+logger.info("=" * 60)
+logger.info("SCRAPING DATA HISTORIS SAHAM INDONESIA")
+logger.info("=" * 60)
+logger.info(f"Periode: {START_DATE.date()} s/d {END_DATE.date()}")
+logger.info("-" * 60)
 
 all_data = []
 
 for ticker, nama in SAHAM_LIST.items():
-    print(f"\n Download {ticker} ({nama})...")
+    logger.info(f"\n Download {ticker} ({nama})...")
     
     # download dari Yahoo Finance
     stock = yf.Ticker(ticker)
     df = stock.history(start=START_DATE, end=END_DATE)
     
     if df.empty:
-        print(f"  Gagal download {ticker}")
+        logger.info(f"  Gagal download {ticker}")
         continue
     
     # format data
@@ -53,7 +56,7 @@ for ticker, nama in SAHAM_LIST.items():
     df_clean['Daily_Change_Pct'] = (df_clean['Daily_Change'] / df_clean['Open']) * 100
     
     all_data.append(df_clean)
-    print(f" {len(df_clean)} baris data")
+    logger.info(f" {len(df_clean)} baris data")
 
 # gabungkan semua saham
 df_final = pd.concat(all_data, ignore_index=True)
@@ -63,11 +66,11 @@ output_file = "data/saham_indonesia_historical.csv"
 os.makedirs("data", exist_ok=True)
 df_final.to_csv(output_file, index=False)
 
-print("\n" + "=" * 60)
-print(" SCRAPING SELESAI!")
-print("=" * 60)
-print(f" File CSV tersimpan: {output_file}")
-print(f" Total baris: {len(df_final)}")
-print(f" Total saham: {df_final['Ticker'].nunique()}")
-print(f"\n Preview data:")
-print(df_final[['Date', 'Ticker', 'Open', 'Close', 'Daily_Change']].head(10).to_string())
+logger.info("\n" + "=" * 60)
+logger.info(" SCRAPING SELESAI!")
+logger.info("=" * 60)
+logger.info(f" File CSV tersimpan: {output_file}")
+logger.info(f" Total baris: {len(df_final)}")
+logger.info(f" Total saham: {df_final['Ticker'].nunique()}")
+logger.info(f"\n Preview data:")
+logger.info(df_final[['Date', 'Ticker', 'Open', 'Close', 'Daily_Change']].head(10).to_string())

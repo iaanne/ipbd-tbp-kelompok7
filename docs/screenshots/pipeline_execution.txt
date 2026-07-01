@@ -1,0 +1,65 @@
+============================================
+ FULL PIPELINE EXECUTION - Wed Jul  1 10:35:26 AM WIB 2026
+============================================
+
+--- BATCH: File Inventory ---
+  raw-data/: 4 files
+    raw-data/saham_demo_1.csv (183450 bytes)
+    raw-data/saham_demo_2.csv (183450 bytes)
+    raw-data/saham_demo_3.csv (183450 bytes)
+    raw-data/saham_indonesia_historical.csv (192778 bytes)
+  logs/: 3 files
+    logs/batch_demo/run_1.json (102 bytes)
+    logs/batch_demo/run_2.json (102 bytes)
+    logs/batch_demo/run_3.json (102 bytes)
+  metadata/: 3 files
+    metadata/data_quality_20260701_103256.json (3130 bytes)
+    metadata/data_quality_20260701_103505.json (3140 bytes)
+    metadata/table_metadata.json (1601 bytes)
+  features/: 1 files
+    features/engineered_features_20260701_103151.parquet (252763 bytes)
+  models/: 2 files
+    models/kmeans_cluster_20260701_103159.joblib (7329 bytes)
+    models/kmeans_cluster_20260701_103159_info.json (491 bytes)
+  predictions/: 3 files
+    predictions/batch_enriched_20260701_103217.parquet (264073 bytes)
+    predictions/batch_enriched_20260701_103248.parquet (264073 bytes)
+    predictions/engineered_features_20260701_103151_enriched.parquet (253690 bytes)
+  pii-sample/: 3 files
+    pii-sample/data_trader_masked.csv (525 bytes)
+    pii-sample/data_trader_original.csv (600 bytes)
+    pii-sample/masking_documentation.json (479 bytes)
+  audit/: 2 files
+    audit/audit_20260701_103256.json (213 bytes)
+    audit/audit_20260701_103505.json (213 bytes)
+
+--- ML: Model Info ---
+  Model: KMeans, Clusters: 4
+  Features: ['Returns_1d', 'Returns_5d', 'Volatility_5d', 'Volume_Change', 'Price_Range_Pct', 'Close_Open_Ratio', 'SMA_Cross', 'RSI', 'Volume']
+  Samples: 1326
+  Silhouette Score: -0.0776992248642601
+  Cluster Distribution: {'2': 592, '3': 472, '1': 152, '0': 110}
+
+--- DATA QUALITY ---
+Rows with Null: 0 (0.0%)
+Duplicate Rows: 0
+
+=== TABLE METADATA ===
+Owner: Kelompok 7 - IPBD
+Description: Data historis harga saham Indonesia dari YFinance
+Columns: 10
+PII: None
+
+--- PII MASKING ---
+[INFO] 2026-07-01 10:35:33,559 - __main__ -     Saldo:    Rp 50,000,000 -> 50-100 juta
+[INFO] 2026-07-01 10:35:33,560 - __main__ - 
+  User 2:
+[INFO] 2026-07-01 10:35:33,560 - __main__ -     Nama:     Siti Rahmawati                 -> Siti R***
+[INFO] 2026-07-01 10:35:33,561 - __main__ -     Email:    siti.rahma@yahoo.com           -> s****a@yahoo.com
+[INFO] 2026-07-01 10:35:33,561 - __main__ -     Telepon:  082345678901                   -> 082****901
+[INFO] 2026-07-01 10:35:33,562 - __main__ -     Alamat:   Jl. Sudirman No. 45, Bandung   -> Jl. ***** 45,  Bandung
+[INFO] 2026-07-01 10:35:33,562 - __main__ -     Saldo:    Rp 100,000,000 -> > 100 juta
+
+============================================
+ PIPELINE BERHASIL - Semua Stage OK
+============================================

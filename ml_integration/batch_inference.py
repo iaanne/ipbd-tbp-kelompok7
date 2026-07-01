@@ -8,20 +8,24 @@ from io import BytesIO, StringIO
 from datetime import datetime
 import logging
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(asctime)s - %(name)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-MINIO_ENDPOINT = os.getenv('MINIO_ENDPOINT', 'http://localhost:9000')
-MINIO_ACCESS_KEY = os.getenv('MINIO_ACCESS_KEY', 'admin')
-MINIO_SECRET_KEY = os.getenv('MINIO_SECRET_KEY', 'SuperSecretPassword123!')
-BUCKET = 'stock-indonesia-bucket'
+from botocore.config import Config
 
-def get_minio_client():
+GARAGE_ENDPOINT = os.getenv('GARAGE_ENDPOINT', 'http://localhost:3900')
+GARAGE_ACCESS_KEY = os.getenv('GARAGE_ACCESS_KEY', 'GKc98624849db70446555a905b')
+GARAGE_SECRET_KEY = os.getenv('GARAGE_SECRET_KEY', '934f97fb29df4f1da215e689c57ab5b42c4e42798841961e4df77d4d3ae6c828')
+BUCKET = os.getenv('GARAGE_BUCKET', 'stock-bucket')
+
+def get_garage_client():
     return boto3.client(
         's3',
-        endpoint_url=MINIO_ENDPOINT,
-        aws_access_key_id=MINIO_ACCESS_KEY,
-        aws_secret_access_key=MINIO_SECRET_KEY,
+        endpoint_url=GARAGE_ENDPOINT,
+        aws_access_key_id=GARAGE_ACCESS_KEY,
+        aws_secret_access_key=GARAGE_SECRET_KEY,
+        config=Config(signature_version='s3v4'),
+        region_name='garage'
     )
 
 def load_latest_model(client):
@@ -31,7 +35,7 @@ def load_latest_model(client):
         key=lambda x: x['LastModified'], reverse=True
     )
     if not model_files:
-        raise FileNotFoundError("No model files found in MinIO")
+        raise FileNotFoundError("No model files found in Garage")
 
     obj = client.get_object(Bucket=BUCKET, Key=model_files[0]['Key'])
     model = joblib.load(BytesIO(obj['Body'].read()))
@@ -104,7 +108,7 @@ def save_enriched_data(client, df):
     return key
 
 def analyze_ihsg_prediction(df):
-    ihsg = df[df['Ticker'] == '^JKSE'].copy()
+    ihsg = df[df['Ticker'].str.contains('JKSE', na=False)].copy()
     if ihsg.empty:
         return {"message": "No IHSG data available"}
 
@@ -131,7 +135,7 @@ def analyze_ihsg_prediction(df):
     return analysis
 
 if __name__ == '__main__':
-    client = get_minio_client()
+    client = get_garage_client()
 
     model_info = load_latest_model_info(client)
     logger.info(f"Model info: {model_info}")

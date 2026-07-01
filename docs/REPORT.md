@@ -31,16 +31,19 @@ Lihat [ARCHITECTURE.md](./ARCHITECTURE.md) untuk diagram arsitektur lengkap deng
 - **Source**: YFinance real-time via Kafka producer
 - **Broker**: Kafka topic `stock-stream-topic`
 - **Proses**: Kafka Producer (60s interval) → Spark Structured Streaming (5-min window)
+- **Output**: Console + Garage S3 (`stream-data/` prefix)
 - **Frekuensi**: Real-time
-- **Bukti**: Data tersimpan di Garage (stream-data/) + log execution
+- **Bukti running 3x/4x/10x**: Demo script `scripts/run_stream_demo.sh [N]` — jalan N kali + log execution + data tersimpan di Garage
+- **Monitoring**: Grafana dashboard pipeline monitoring
 
 ## 4. Machine Learning (Training & Prediction)
 
 ### KMeans Clustering
 - **Input**: 18 fitur teknis (Returns, SMA, Volatility, RSI, Price Range, dll.)
-- **Model**: 4 cluster (Low/Medium-Low/Medium-High/High risk)
-- **Training**: 3x per minggu (Senin, Rabu, Jumat via Prefect)
+- **Model**: Multi-cluster (3, 4, atau 5 cluster — dapat diatur via argumen)
+- **Training**: 3x per minggu (Senin, Rabu, Jumat via Prefect) + demo 3x via `scripts/run_ml_demo.sh` (latih dengan `n_clusters=3,4,5`)
 - **Output**: Cluster label → enrich data asli → prediksi risiko
+- **Log severity**: INFO, DEBUG, WARNING, FATAL tercatat di setiap run
 
 ### LSTM Time Series
 - **Input**: Sequence 60 hari harga Close IHSG
@@ -76,6 +79,7 @@ Lihat [ARCHITECTURE.md](./ARCHITECTURE.md) untuk diagram arsitektur lengkap deng
 - **Prefect**: `on_failure` callback → trigger flow `alert_notify_flow`
 - **Email**: SMTP Gmail ke `team@example.com`
 - **Telegram**: Bot API ke chat group
+- **WhatsApp**: CallMeBot API (atau fallback log ke `/tmp/whatsapp_alerts.log`)
 - **Alertmanager**: Juga mengirim alert via webhook
 
 ## 8. Keamanan & Konfigurasi
@@ -129,7 +133,13 @@ prefect deployment build prefect/flows/data_quality_flow.py:data_quality_flow \
 # 4. Demo 10x batch
 bash scripts/run_batch_demo.sh
 
-# 5. Full demo
+# 5. Demo stream 3x (ganti angka untuk 4x/10x)
+bash scripts/run_stream_demo.sh 3
+
+# 6. Demo ML 3x training (KMeans k=3,4,5)
+bash scripts/run_ml_demo.sh
+
+# 7. Full demo: Batch → DQ → PII → ML
 bash scripts/run_all_demo.sh
 ```
 

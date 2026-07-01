@@ -85,12 +85,28 @@ bash scripts/run_stream.sh streaming
 bash scripts/run_stream.sh realtime-ml
 ```
 
-### 5. Demo 10x Run (Bukti ke Dosen)
+### 5. Demo Batch 10x Run (Bukti ke Dosen)
 ```bash
 # Batch pipeline jalan 10x otomatis + log
 bash scripts/run_batch_demo.sh
+```
 
-# Full pipeline demo: Batch → DQ → PII → ML → Inventory
+### 6. Demo Stream 3x/4x/10x
+```bash
+# Stream pipeline jalan N kali (default 3)
+bash scripts/run_stream_demo.sh 3
+bash scripts/run_stream_demo.sh 10
+```
+
+### 7. Demo ML Training 3x
+```bash
+# Training KMeans dengan k=3, k=4, k=5
+bash scripts/run_ml_demo.sh
+```
+
+### 8. Full Pipeline Demo
+```bash
+# Batch → DQ → PII → ML → Inventory
 bash scripts/run_all_demo.sh
 ```
 

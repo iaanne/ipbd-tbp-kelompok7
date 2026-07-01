@@ -1,0 +1,129 @@
+{
+  "dashboard": {
+    "title": "📊 Stock Analysis Dashboard - IHSG & Prediksi",
+    "description": "Dashboard analisis pergerakan IHSG, clustering saham, dan prediksi harga. Tujuan: mengidentifikasi kapan IHSG menyentuh 6000 dan melihat potensi market.",
+    "tags": ["saham", "ihsg", "prediksi", "ipbd"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "IHSG Close Price (7d & 30d SMA)",
+        "type": "timeseries",
+        "datasource": "InfluxDB",
+        "fieldConfig": {
+          "defaults": {
+            "unit": "none"
+          }
+        },
+        "targets": [
+          {
+            "query": "from(bucket: \"stock-metrics\") |> range(start: -30d) |> filter(fn: (r) => r._measurement == \"ihsg\" and r._field == \"close\")"
+          }
+        ],
+        "description": "Menampilkan harga penutupan IHSG dengan 7-day dan 30-day Simple Moving Average untuk melihat tren jangka pendek dan panjang."
+      },
+      {
+        "id": 2,
+        "title": "IHSG Volume Perdagangan",
+        "type": "bargauge",
+        "datasource": "InfluxDB",
+        "targets": [
+          {
+            "query": "from(bucket: \"stock-metrics\") |> range(start: -7d) |> filter(fn: (r) => r._measurement == \"ihsg\" and r._field == \"volume\")"
+          }
+        ],
+        "description": "Volume perdagangan IHSG harian. Volume tinggi mengindikasikan minat pasar yang kuat."
+      },
+      {
+        "id": 3,
+        "title": "Volatilitas IHSG (5d Rolling)",
+        "type": "timeseries",
+        "datasource": "InfluxDB",
+        "targets": [
+          {
+            "query": "from(bucket: \"stock-metrics\") |> range(start: -30d) |> filter(fn: (r) => r._measurement == \"ihsg\" and r._field == \"volatility\")"
+          }
+        ],
+        "description": "Volatilitas 5-hari IHSG. Volatilitas tinggi menandakan ketidakpastian pasar."
+      },
+      {
+        "id": 4,
+        "title": "Cluster Distribution (KMeans)",
+        "type": "piechart",
+        "datasource": "InfluxDB",
+        "targets": [
+          {
+            "query": "from(bucket: \"stock-metrics\") |> range(start: -7d) |> filter(fn: (r) => r._measurement == \"cluster\" and r._field == \"count\")"
+          }
+        ],
+        "description": "Distribusi cluster hasil KMeans clustering. Cluster menunjukkan kelompok saham dengan karakteristik相似 (risk, return, volatility)."
+      },
+      {
+        "id": 5,
+        "title": "RSI (Relative Strength Index) - IHSG",
+        "type": "timeseries",
+        "datasource": "InfluxDB",
+        "targets": [
+          {
+            "query": "from(bucket: \"stock-metrics\") |> range(start: -30d) |> filter(fn: (r) => r._measurement == \"ihsg\" and r._field == \"rsi\")"
+          }
+        ],
+        "description": "RSI 14-hari IHSG. RSI > 70 = overbought (jenuh beli), RSI < 30 = oversold (jenuh jual)."
+      },
+      {
+        "id": 6,
+        "title": "Prediksi IHSG: Hari ke 6000",
+        "type": "stat",
+        "datasource": "InfluxDB",
+        "fieldConfig": {
+          "defaults": {
+            "unit": "none",
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": null},
+                {"color": "yellow", "value": 5},
+                {"color": "green", "value": 2}
+              ]
+            }
+          }
+        },
+        "targets": [
+          {
+            "query": "from(bucket: \"stock-metrics\") |> range(start: -1d) |> filter(fn: (r) => r._measurement == \"prediction\" and r._field == \"days_to_6000\") |> last()"
+          }
+        ],
+        "description": "Estimasi jumlah hari sampai IHSG menyentuh 6000 berdasarkan tren pergerakan saat ini."
+      },
+      {
+        "id": 7,
+        "title": "Daily Change % - Semua Saham",
+        "type": "barchart",
+        "datasource": "InfluxDB",
+        "targets": [
+          {
+            "query": "from(bucket: \"stock-metrics\") |> range(start: -1d) |> filter(fn: (r) => r._measurement == \"stocks\" and r._field == \"daily_change_pct\")"
+          }
+        ],
+        "description": "Perubahan harga harian untuk setiap saham. Warna hijau = naik, merah = turun."
+      },
+      {
+        "id": 8,
+        "title": "Saham per Cluster (Scatter)",
+        "type": "scatter",
+        "datasource": "InfluxDB",
+        "targets": [
+          {
+            "query": "from(bucket: \"stock-metrics\") |> range(start: -1d) |> filter(fn: (r) => r._measurement == \"stocks\") |> pivot(rowKey:[\"_time\"], columnKey:[\"_field\"], valueColumn:\"_value\")"
+          }
+        ],
+        "description": "Scatter plot saham berdasarkan return dan volatility, diwarnai berdasarkan cluster."
+      }
+    ],
+    "links": [],
+    "version": 1
+  },
+  "overwrite": true
+}

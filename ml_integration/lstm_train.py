@@ -11,7 +11,7 @@ from datetime import datetime
 from botocore.config import Config
 import logging
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(asctime)s - %(name)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 GARAGE_ENDPOINT = os.getenv('GARAGE_ENDPOINT', 'http://garage:3900')
@@ -32,7 +32,7 @@ def load_ihsg_data(client):
         data = client.get_object(Bucket=BUCKET, Key=obj['Key'])
         all_dfs.append(pd.read_csv(StringIO(data['Body'].read().decode('utf-8'))))
     df = pd.concat(all_dfs, ignore_index=True)
-    ihsg = df[df['Ticker'] == '^JKSE'].sort_values('Date')
+    ihsg = df[df['Ticker'].str.contains('JKSE', na=False)].sort_values('Date')
     logger.info(f"Loaded {len(ihsg)} IHSG rows")
     return ihsg
 

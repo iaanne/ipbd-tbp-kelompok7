@@ -33,7 +33,7 @@ services:
 
   # KAFKA & ZOOKEEPER - Message broker untuk stream processing
   zookeeper:
-    image: confluentinc/cp-zookeeper:latest
+    image: confluentinc/cp-zookeeper:7.6.0
     container_name: zookeeper
     ports:
       - "2181:2181"
@@ -45,7 +45,7 @@ services:
       - stock-network
 
   kafka:
-    image: confluentinc/cp-kafka:latest
+    image: confluentinc/cp-kafka:7.6.0
     container_name: kafka
     ports:
       - "9092:9092"
@@ -65,31 +65,35 @@ services:
 
   # SPARK - Distributed processing engine
   spark-master:
-    image: bitnami/spark:latest
+    image: apache/spark:latest
     container_name: spark-master
     ports:
-      - "8080:8080"   # Spark UI
+      - "8081:8080"   # Spark UI
       - "7077:7077"
     environment:
       SPARK_MODE: master
+    command: >
+      /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
+      --host spark-master --port 7077 --webui-port 8080
     volumes:
-      - spark-data:/bitnami
+      - spark-data:/opt/spark/work-dir
     restart: unless-stopped
     networks:
       - stock-network
 
   spark-worker:
-    image: bitnami/spark:latest
+    image: apache/spark:latest
     container_name: spark-worker
     environment:
-      SPARK_MODE: worker
-      SPARK_MASTER_URL: spark://spark-master:7077
       SPARK_WORKER_MEMORY: 2G
       SPARK_WORKER_CORES: 2
+    command: >
+      /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker
+      spark://spark-master:7077 --webui-port 8081
     depends_on:
       - spark-master
     volumes:
-      - spark-data:/bitnami
+      - spark-data:/opt/spark/work-dir
     restart: unless-stopped
     networks:
       - stock-network
@@ -169,7 +173,7 @@ services:
 
   # PREFECT - Workflow orchestration (pengganti Airflow)
   prefect-server:
-    image: prefecthq/prefect:3.1-python3.11
+    image: prefecthq/prefect:3-latest
     container_name: prefect-server
     ports:
       - "4200:4200"
@@ -233,6 +237,8 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin
     volumes:
       - grafana-data:/var/lib/grafana
+      - ./dashboard_monitoring/grafana-provisioning/datasources:/etc/grafana/provisioning/datasources
+      - ./dashboard_monitoring/grafana-provisioning/dashboards:/etc/grafana/provisioning/dashboards
     depends_on:
       - prometheus
       - influxdb

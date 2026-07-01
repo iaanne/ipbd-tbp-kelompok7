@@ -5,6 +5,8 @@ from email.mime.text import MIMEText
 
 logger = logging.getLogger(__name__)
 
+WHATSAPP_LOG_FILE = "/tmp/whatsapp_alerts.log"
+
 @task
 def send_email(subject, body):
     smtp_host = os.getenv('SMTP_HOST', 'smtp.gmail.com')
@@ -40,14 +42,38 @@ def send_telegram(message):
     requests.post(url, json={'chat_id': chat_id, 'text': message, 'parse_mode': 'Markdown'}, timeout=10)
     logger.info("Telegram sent")
 
+@task
+def send_whatsapp(message):
+    phone = os.getenv('WHATSAPP_PHONE', '')
+    api_key = os.getenv('WHATSAPP_API_KEY', '')
+    if not phone or not api_key:
+        logger.warning(f"WhatsApp not configured. Logging alert to {WHATSAPP_LOG_FILE}")
+        with open(WHATSAPP_LOG_FILE, 'a') as f:
+            f.write(f"[INFO] WhatsApp Alert: {message}\n")
+        return
+
+    try:
+        import requests
+        url = f"https://api.callmebot.com/whatsapp.php?phone={phone}&text={requests.utils.quote(message)}&apikey={api_key}"
+        resp = requests.get(url, timeout=10)
+        if resp.status_code == 200:
+            logger.info(f"WhatsApp sent to {phone}")
+        else:
+            logger.warning(f"WhatsApp API returned {resp.status_code}")
+    except Exception as e:
+        logger.error(f"WhatsApp send failed: {e}")
+        with open(WHATSAPP_LOG_FILE, 'a') as f:
+            f.write(f"[ERROR] WhatsApp failed: {message}\n")
+
 @flow(log_prints=True)
 def alert_notify_flow(flow_name="unknown", error="unknown"):
     subject = f"[IPBD Alert] Pipeline Failed: {flow_name}"
     body = f"Flow: {flow_name}\nError: {error[:500]}\nTime: ..."
 
     send_email(subject, body)
-    msg = f"🚨 *Pipeline Alert*\n*Flow:* {flow_name}\n*Error:* `{error[:200]}`"
+    msg = f"🔴 Pipeline Alert\nFlow: {flow_name}\nError: {error[:200]}"
     send_telegram(msg)
+    send_whatsapp(msg)
 
 if __name__ == "__main__":
     alert_notify_flow(flow_name="test", error="test error")

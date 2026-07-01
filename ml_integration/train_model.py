@@ -11,21 +11,25 @@ from sklearn.cluster import KMeans
 from sklearn.pipeline import Pipeline
 import logging
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(asctime)s - %(name)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-MINIO_ENDPOINT = os.getenv('MINIO_ENDPOINT', 'http://localhost:9000')
-MINIO_ACCESS_KEY = os.getenv('MINIO_ACCESS_KEY', 'admin')
-MINIO_SECRET_KEY = os.getenv('MINIO_SECRET_KEY', 'SuperSecretPassword123!')
-BUCKET = 'stock-indonesia-bucket'
+from botocore.config import Config
+
+GARAGE_ENDPOINT = os.getenv('GARAGE_ENDPOINT', 'http://localhost:3900')
+GARAGE_ACCESS_KEY = os.getenv('GARAGE_ACCESS_KEY', 'GKc98624849db70446555a905b')
+GARAGE_SECRET_KEY = os.getenv('GARAGE_SECRET_KEY', '934f97fb29df4f1da215e689c57ab5b42c4e42798841961e4df77d4d3ae6c828')
+BUCKET = os.getenv('GARAGE_BUCKET', 'stock-bucket')
 MODEL_PREFIX = 'models/'
 
-def get_minio_client():
+def get_garage_client():
     return boto3.client(
         's3',
-        endpoint_url=MINIO_ENDPOINT,
-        aws_access_key_id=MINIO_ACCESS_KEY,
-        aws_secret_access_key=MINIO_SECRET_KEY,
+        endpoint_url=GARAGE_ENDPOINT,
+        aws_access_key_id=GARAGE_ACCESS_KEY,
+        aws_secret_access_key=GARAGE_SECRET_KEY,
+        config=Config(signature_version='s3v4'),
+        region_name='garage'
     )
 
 def load_latest_features(client):
@@ -35,7 +39,7 @@ def load_latest_features(client):
         key=lambda x: x['LastModified'], reverse=True
     )
     if not feature_files:
-        raise FileNotFoundError("No feature parquet files found in MinIO")
+        raise FileNotFoundError("No feature parquet files found in Garage")
 
     obj = client.get_object(Bucket=BUCKET, Key=feature_files[0]['Key'])
     df = pd.read_parquet(BytesIO(obj['Body'].read()))
@@ -54,7 +58,7 @@ def prepare_clustering_data(df):
     if missing:
         logger.warning(f"Missing features for clustering: {missing}")
 
-    data = df[available].dropna()
+    data = df[available].replace([np.inf, -np.inf], np.nan).dropna()
     logger.info(f"Clustering data: {len(data)} rows, {len(available)} features")
     return data, available
 
@@ -90,7 +94,7 @@ def train_clustering_model(X, feature_names, n_clusters=4):
     logger.info(f"Model trained: {json.dumps(model_info, indent=2)}")
     return pipeline, model_info
 
-def save_model_to_minio(client, pipeline, model_info):
+def save_model_to_garage(client, pipeline, model_info):
     model_buffer = BytesIO()
     joblib.dump(pipeline, model_buffer)
     model_buffer.seek(0)
@@ -145,13 +149,17 @@ def predict_clusters(client, pipeline, feature_names):
 if __name__ == '__main__':
     import sys
 
-    client = get_minio_client()
+    n_clusters = 4
+    if len(sys.argv) > 1:
+        n_clusters = int(sys.argv[1])
+
+    client = get_garage_client()
     df = load_latest_features(client)
 
     X, feature_names = prepare_clustering_data(df)
-    model, model_info = train_clustering_model(X, feature_names, n_clusters=4)
+    model, model_info = train_clustering_model(X, feature_names, n_clusters=n_clusters)
 
-    model_key, info_key = save_model_to_minio(client, model, model_info)
+    model_key, info_key = save_model_to_garage(client, model, model_info)
     predict_clusters(client, model, feature_names)
 
     print(f"Training selesai. Model: {model_key}")

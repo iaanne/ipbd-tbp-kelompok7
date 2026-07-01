@@ -1,3 +1,7 @@
+import logging
+logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(asctime)s - %(message)s')
+logger = logging.getLogger(__name__)
+
 from kafka import KafkaProducer
 import json
 import yfinance as yf
@@ -14,12 +18,12 @@ producer = KafkaProducer(
 
 TOPIC = "stock-stream-topic"
 
-print("=" * 60)
-print("KAFKA PRODUCER - REAL TIME STOCK DATA")
-print("=" * 60)
-print("Mengirim data real-time ke Kafka topic...")
-print("(Ctrl+C untuk berhenti)")
-print("-" * 60)
+logger.info("=" * 60)
+logger.info("KAFKA PRODUCER - REAL TIME STOCK DATA")
+logger.info("=" * 60)
+logger.info("Mengirim data real-time ke Kafka topic...")
+logger.info("(Ctrl+C untuk berhenti)")
+logger.info("-" * 60)
 
 SAHAM_REALTIME = ["BBCA.JK", "BBRI.JK", "TLKM.JK"]
 
@@ -44,13 +48,13 @@ try:
 
                     # kirim ke Kafka Topic
                     producer.send(TOPIC, message)
-                    print(f" {message['timestamp']} | {message['ticker']} | "
+                    logger.info(f" {message['timestamp']} | {message['ticker']} | "
                         f"Open: {message['open']:.0f} | Close: {message['close']:.0f}")
             except Exception as e:
-                print(f" Error: {e}")
+                logger.info(f" Error: {e}")
 
         time.sleep(60) # kirim setiap 1 menit
 except KeyboardInterrupt:
-    print("\n Menghentikan producer...")
+    logger.info("\n Menghentikan producer...")
 finally:
     producer.close()
