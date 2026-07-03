@@ -15,15 +15,33 @@ Memprediksi kapan IHSG benar-benar menyentuh titik 6000 (minimal 2 hari berturut
 ## Struktur Folder
 ```
 ├── batch_processing/          # Scrape YFinance, Garage S3 CRUD, Spark Batch ETL
+│   └── data/                  # Output CSV lokal hasil scraping
 ├── stream-processing/         # Kafka Producer + Spark Structured Streaming
 ├── ml_integration/            # Feature Eng, KMeans, LSTM, Prediksi
-├── prefect/                   # Orchestration flows (pengganti Airflow)
-├── dashboard_monitoring/      # Grafana, Prometheus, Alertmanager, PII masking
-├── config/                    # Konfigurasi Garage, Trino, Hive, PostgreSQL
-├── scripts/                   # Pipeline scripts (run_pipeline.sh dll)
+│   └── models/                # Saved model files (.joblib, .h5)
+├── prefect/                   # Orchestration flows (Prefect)
+│   ├── Dockerfile             # Custom Prefect agent image
+│   ├── requirements.txt       # Prefect agent dependencies
+│   └── flows/                 # Flow definitions (batch, ML, DQ, monitoring, alert)
+├── dashboard_monitoring/      # Streamlit, Grafana, Prometheus, InfluxDB, Alertmanager
+│   ├── grafana-provisioning/  # Auto-provisioning datasources & dashboards
+│   ├── grafana-dashboards/    # Pre-built JSON dashboards (stock + pipeline)
+│   ├── prometheus/            # Prometheus config + alert rules
+│   └── alertmanager/          # Alertmanager config (email, Telegram, WhatsApp)
+├── config/                    # Konfigurasi service
+│   ├── garage/                # Garage S3 config + setup script
+│   ├── hive/                  # Hive Metastore config
+│   ├── trino/                 # Trino config + catalog files
+│   └── postgresql/            # HMS init SQL
+├── scripts/                   # Pipeline scripts (.sh)
 ├── docs/                      # Dokumentasi arsitektur & laporan
-├── docker-compose.yml         # Semua service container
+│   └── screenshots/           # Bukti eksekusi pipeline
+├── data/                      # Dataset historis saham
+├── logs/                      # Log eksekusi pipeline
+│   └── demo/                  # 10x batch demo run logs
+├── docker-compose.yml         # Semua service container (14+ services)
 ├── .env.example               # Contoh konfigurasi environment
+├── requirements.txt           # Python dependencies
 └── README.md
 ```
 
@@ -48,7 +66,7 @@ PHASE 3: STREAM PIPELINE (real-time)
   Kafka Producer  →  Spark Streaming  →  Real-time ML Prediction
 
 PHASE 4: GOVERNANCE & MONITORING
-  Data Quality  →  PII Masking  →  Grafana Dashboard  →  Alerting
+  Data Quality  →  PII Masking  →  Grafana Dashboard (auto-provisioned)  →  Alerting (Email, Telegram, WhatsApp)
 ```
 
 ---
@@ -131,6 +149,10 @@ docker-compose up -d
 
 # 5. Setup Garage S3 (bucket, key, policy)
 bash config/garage/setup-garage.sh
+
+# 6. Setup mc alias untuk verifikasi (isi ACCESS/SECRET dari .env)
+mc alias set garage http://localhost:3900 $GARAGE_ACCESS_KEY $GARAGE_SECRET_KEY
+mc ls --recursive garage/stock-bucket/
 ```
 
 ### Phase 1: Batch Pipeline
@@ -142,10 +164,12 @@ python scrape_historical.py
 
 # Step 2: Upload CSV ke Garage S3 (buat bucket + upload)
 python minio_operations.py --keep-data
+# ✅ Verifikasi: mc ls --recursive garage/stock-bucket/raw-data/
 
 # Step 3: Spark Batch ETL (hitung SMA 7/30, Volatility, Price Range)
 python spark_batch_etl.py
 # Output: s3://stock-bucket/processed-data/features/
+# ✅ Verifikasi: mc ls --recursive garage/stock-bucket/processed-data/
 
 # Step 4 (opsional): Data Quality Check
 cd ../dashboard_monitoring
@@ -158,22 +182,27 @@ python data_quality.py
 cd ml_integration
 python feature_engineering.py
 # Output: s3://stock-bucket/features/
+# ✅ Verifikasi: mc ls --recursive garage/stock-bucket/features/
 
 # Step 2: Training KMeans Clustering (4 cluster risiko)
 python train_model.py
 # Output: Model + predictions ke s3://stock-bucket/models/ & predictions/
+# ✅ Verifikasi: mc ls --recursive garage/stock-bucket/models/ && mc ls --recursive garage/stock-bucket/predictions/
 
 # Step 3: Batch Inference + Enrich Data
 python batch_inference.py
 # Output: Enriched predictions + IHSG analysis (estimasi hari ke 6000)
+# ✅ Verifikasi: mc ls --recursive garage/stock-bucket/predictions/ | grep batch
 
 # Step 4: Training LSTM Time Series
 python lstm_train.py
 # Output: Model .h5 ke s3://stock-bucket/models/ + MLflow tracking
+# ✅ Verifikasi: mc ls --recursive garage/stock-bucket/models/ | grep lstm
 
 # Step 5: LSTM Prediksi + Estimasi Hari ke 6000
 python lstm_predict.py
 # Output: Prediksi 7 hari ke depan + estimasi kapan IHSG tembus 6000
+# ✅ Verifikasi: mc ls --recursive garage/stock-bucket/predictions/lstm/
 ```
 
 ### Phase 3: Stream Processing (Real-time)
@@ -192,11 +221,23 @@ python realtime_prediction.py
 
 ### Phase 4: Data Governance
 ```bash
-# PII Masking Demo (Email, Nama, Telepon, Alamat, Saldo)
+# 1. Data Quality Check (nulls, duplicates, type errors, metadata)
 cd dashboard_monitoring
+python data_quality.py
+# Output: Quality report + metadata + audit trail ke s3://stock-bucket/metadata/ & audit/
+# ✅ Verifikasi: mc ls --recursive garage/stock-bucket/metadata/ && mc ls --recursive garage/stock-bucket/audit/
+
+# 2. PII Masking Demo (Email, Nama, Telepon, Alamat, Saldo)
 python masking_pii.py
 # Output: Original + masked CSV ke s3://stock-bucket/pii-sample/
 ```
+
+### Monitoring
+Setelah semua service Docker berjalan, akses:
+- **Grafana** di http://localhost:3000 (admin/admin) — dashboard auto-provisioned untuk analisis saham & monitoring pipeline
+- **Prometheus** di http://localhost:9090 — metrics pipeline execution
+- **InfluxDB** di http://localhost:8086 — time-series storage untuk metrics
+- **Alertmanager** — notifikasi gagal pipeline via **Email**, **Telegram**, dan **WhatsApp** (CallMeBot API)
 
 ### Register Prefect Orchestration (Opsional)
 ```bash
@@ -211,6 +252,18 @@ prefect deployment build prefect/flows/ml_training.py:ml_training_flow \
 # Data Quality (setiap hari kerja 07:00)
 prefect deployment build prefect/flows/data_quality_flow.py:data_quality_flow \
   --name "Data Quality" --cron "0 7 * * 1-5"
+
+# Stream Monitoring (setiap 30 menit)
+prefect deployment build prefect/flows/stream_monitor.py:stream_monitor_flow \
+  --name "Stream Monitor" --interval 1800
+
+# Push Metrics to InfluxDB (setiap 15 menit)
+prefect deployment build prefect/flows/push_metrics.py:push_metrics_flow \
+  --name "Push Metrics" --interval 900
+
+# Alert Notification (Email/Telegram/WhatsApp fallback)
+prefect deployment build prefect/flows/alert_notify.py:alert_notify_flow \
+  --name "Alert Notify"
 ```
 
 ---
@@ -219,13 +272,40 @@ prefect deployment build prefect/flows/data_quality_flow.py:data_quality_flow \
 | Service | URL | Login |
 |---------|-----|-------|
 | Garage WebUI | http://localhost:3909 | admin_token_rahasia123 |
-| Spark UI | http://localhost:8080 | - |
+| Spark UI (Master) | http://localhost:8080 | - |
+| Spark UI (Worker) | http://localhost:8081 | - |
 | Prefect UI | http://localhost:4200 | - |
 | Trino SQL | http://localhost:8082 | - |
 | MLflow | http://localhost:5000 | - |
+| Kafka UI | http://localhost:9000 | - |
 | Grafana | http://localhost:3000 | admin / admin |
 | Prometheus | http://localhost:9090 | - |
 | InfluxDB | http://localhost:8086 | - |
+| Streamlit Dashboard | http://localhost:8501 | - |
+
+## Verifikasi Cepat (mc ls)
+
+Setup alias Garage (cukup sekali):
+```bash
+mc alias set garage http://localhost:3900 GK390299d18f1adea498888b9e e27d368e62e42c3ff53d2a844ab236cf87cf8ce3d7de88fe186e5932db0c135a
+```
+
+Cek isi bucket:
+```bash
+mc ls --recursive garage/stock-bucket/
+```
+
+Berdasarkan prefix:
+```bash
+mc ls --recursive garage/stock-bucket/raw-data/          # CSV mentah
+mc ls --recursive garage/stock-bucket/processed-data/    # Hasil Spark ETL
+mc ls --recursive garage/stock-bucket/features/         # Feature engineering
+mc ls --recursive garage/stock-bucket/models/           # Model ML (.joblib, .h5)
+mc ls --recursive garage/stock-bucket/predictions/      # Enriched + LSTM predictions
+mc ls --recursive garage/stock-bucket/metadata/         # Data quality report
+mc ls --recursive garage/stock-bucket/stream-data/      # Hasil Spark Streaming
+mc ls --recursive garage/stock-bucket/pii-sample/       # PII masking demo
+```
 
 ## Streamlit Dashboard
 Dashboard visualisasi interaktif untuk monitoring pipeline dan analisis saham.
@@ -262,8 +342,8 @@ streamlit run dashboard_monitoring/streamlit_app.py
 - **ML Lifecycle**: MLflow (Tracking, Model Registry, Artifacts)
 - **ML Models**: KMeans Clustering (risk profiling) + LSTM (price prediction)
 - **Orchestration**: Prefect (Flows + Agent)
-- **Monitoring**: Prometheus, InfluxDB, Grafana, Alertmanager
-- **Notification**: Email (SMTP), Telegram (Bot API)
+- **Monitoring**: Prometheus, InfluxDB 2.x, Grafana (auto-provisioned dashboards)
+- **Notification**: Email (SMTP), Telegram (Bot API), WhatsApp (CallMeBot API) — fallback chain
 
 ## PII Masking
 Script `dashboard_monitoring/masking_pii.py` mendemonstrasikan masking data pribadi:
