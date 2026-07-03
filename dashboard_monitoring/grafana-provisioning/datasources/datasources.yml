@@ -20,4 +20,4 @@ datasources:
       defaultBucket: pipeline-metrics
       tlsSkipVerify: true
     secureJsonData:
-      token: ${INFLUXDB_TOKEN}
+      token: BJAi5y5VmVErg7VrQ5l7u_1coe_gLrTmX-dM6pJ_edZXEVHvPVK4Msy2HPI_Qzm3579M7F9cHfG5xmkTIsybXw==
