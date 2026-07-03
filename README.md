@@ -282,6 +282,25 @@ prefect deployment build prefect/flows/alert_notify.py:alert_notify_flow \
 | Prometheus | http://localhost:9090 | - |
 | InfluxDB | http://localhost:8086 | - |
 | Streamlit Dashboard | http://localhost:8501 | - |
+| Elasticsearch | http://localhost:9200 | - |
+| Kibana | http://localhost:5601 | - |
+
+## Log Monitoring (Kibana)
+
+Pipeline execution logs di-index ke **Elasticsearch** dan divisualisasikan di **Kibana**.
+
+### Cara Push Log
+```bash
+# Push logs dari Garage + local + sample data ke Elasticsearch
+python scripts/push_logs_to_elk.py
+```
+
+### Akses Kibana
+- Buka http://localhost:5601
+- **Discover** → pilih index **Pipeline Logs**
+- Filter by **severity**: INFO, DEBUG, WARNING, FATAL
+- Filter by **pipeline**: batch, stream, ml-training, data-quality, pii-masking
+- Cek **stack_trace** dan **error_code** untuk log FATAL
 
 ## Verifikasi Cepat (mc ls)
 
@@ -343,6 +362,7 @@ streamlit run dashboard_monitoring/streamlit_app.py
 - **ML Models**: KMeans Clustering (risk profiling) + LSTM (price prediction)
 - **Orchestration**: Prefect (Flows + Agent)
 - **Monitoring**: Prometheus, InfluxDB 2.x, Grafana (auto-provisioned dashboards)
+- **Log Management**: Elasticsearch + Kibana (ELK) — pipeline logs with severity levels
 - **Notification**: Email (SMTP), Telegram (Bot API), WhatsApp (CallMeBot API) — fallback chain
 
 ## PII Masking
