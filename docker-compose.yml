@@ -160,8 +160,8 @@ services:
       --default-artifact-root s3://stock-bucket/mlflow/
     environment:
       MLFLOW_S3_ENDPOINT_URL: http://garage:3900
-      AWS_ACCESS_KEY_ID: GKc98624849db70446555a905b
-      AWS_SECRET_ACCESS_KEY: 934f97fb29df4f1da215e689c57ab5b42c4e42798841961e4df77d4d3ae6c828
+      AWS_ACCESS_KEY_ID: ${GARAGE_ACCESS_KEY}
+      AWS_SECRET_ACCESS_KEY: ${GARAGE_SECRET_KEY}
       AWS_DEFAULT_REGION: garage
     volumes:
       - mlflow-data:/mlflow
@@ -177,7 +177,7 @@ services:
     container_name: prefect-server
     ports:
       - "4200:4200"
-    command: prefect server start --port 4200
+    command: prefect server start --host 0.0.0.0 --port 4200
     volumes:
       - prefect-data:/root/.prefect
     restart: unless-stopped
@@ -201,8 +201,8 @@ services:
     environment:
       PREFECT_API_URL: http://prefect-server:4200/api
       GARAGE_ENDPOINT: http://garage:3900
-      GARAGE_ACCESS_KEY: GKc98624849db70446555a905b
-      GARAGE_SECRET_KEY: 934f97fb29df4f1da215e689c57ab5b42c4e42798841961e4df77d4d3ae6c828
+      GARAGE_ACCESS_KEY: ${GARAGE_ACCESS_KEY}
+      GARAGE_SECRET_KEY: ${GARAGE_SECRET_KEY}
       GARAGE_BUCKET: stock-bucket
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       MLFLOW_TRACKING_URI: http://mlflow:5000
@@ -288,6 +288,34 @@ services:
     networks:
       - stock-network
 
+  elasticsearch:
+    image: elasticsearch:8.17.4
+    container_name: elasticsearch
+    ports:
+      - "9200:9200"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    restart: unless-stopped
+    networks:
+      - stock-network
+
+  kibana:
+    image: kibana:8.17.4
+    container_name: kibana
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    depends_on:
+      - elasticsearch
+    restart: unless-stopped
+    networks:
+      - stock-network
+
 volumes:
   garage-meta:
   garage-data:
@@ -298,6 +326,7 @@ volumes:
   prometheus-data:
   grafana-data:
   influxdb-data:
+  elasticsearch-data:
 
 networks:
   stock-network:
