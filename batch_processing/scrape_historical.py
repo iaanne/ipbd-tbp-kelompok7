@@ -16,9 +16,9 @@ SAHAM_LIST = {
     "ASII.JK": "Astra",
 }
 
-# periode: 1 tahun ke belakang (data historis)
+# periode: 5 tahun ke belakang (data historis)
 END_DATE = datetime.now()
-START_DATE = END_DATE - timedelta(days=365)
+START_DATE = END_DATE - timedelta(days=1825)
 
 logger.info("=" * 60)
 logger.info("SCRAPING DATA HISTORIS SAHAM INDONESIA")
