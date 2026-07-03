@@ -10,13 +10,16 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import silhouette_score
+from dotenv import load_dotenv, find_dotenv
+load_dotenv(find_dotenv())
+from alert_notify import alert_notify_flow
 
 sys.path.insert(0, '/opt/prefect')
 logger = logging.getLogger(__name__)
 
 GARAGE_ENDPOINT = os.getenv('GARAGE_ENDPOINT', 'http://garage:3900')
-GARAGE_ACCESS_KEY = os.getenv('GARAGE_ACCESS_KEY', 'GKc98624849db70446555a905b')
-GARAGE_SECRET_KEY = os.getenv('GARAGE_SECRET_KEY', '934f97fb29df4f1da215e689c57ab5b42c4e42798841961e4df77d4d3ae6c828')
+GARAGE_ACCESS_KEY = os.environ['GARAGE_ACCESS_KEY']
+GARAGE_SECRET_KEY = os.environ['GARAGE_SECRET_KEY']
 BUCKET = os.getenv('GARAGE_BUCKET', 'stock-bucket')
 MLFLOW_TRACKING_URI = os.getenv('MLFLOW_TRACKING_URI', 'http://mlflow:5000')
 
@@ -140,13 +143,21 @@ def save_models_to_garage(kmeans_model, lstm_model):
 
 @flow(log_prints=True)
 def ml_training_flow():
-    df = load_features()
-    X, features = prepare_clustering_data(df)
+    try:
+        os.environ['AWS_ACCESS_KEY_ID'] = GARAGE_ACCESS_KEY
+        os.environ['AWS_SECRET_ACCESS_KEY'] = GARAGE_SECRET_KEY
+        os.environ['MLFLOW_S3_ENDPOINT_URL'] = GARAGE_ENDPOINT
+        os.environ['AWS_DEFAULT_REGION'] = 'garage'
+        df = load_features()
+        X, features = prepare_clustering_data(df)
 
-    mlflow.set_experiment("stock-pipeline")
-    kmeans_model = train_kmeans(X, features)
-    lstm_model = train_lstm(df)
-    save_models_to_garage(kmeans_model, lstm_model)
+        mlflow.set_experiment("stock-pipeline")
+        kmeans_model = train_kmeans(X, features)
+        lstm_model = train_lstm(df)
+        save_models_to_garage(kmeans_model, lstm_model)
+    except Exception as e:
+        alert_notify_flow(flow_name="ML Training", error=str(e))
+        raise
 
 if __name__ == "__main__":
     ml_training_flow()

@@ -4,14 +4,17 @@ import os, sys, json, logging, boto3
 import pandas as pd
 from io import StringIO
 from botocore.config import Config
+from dotenv import load_dotenv, find_dotenv
+load_dotenv(find_dotenv())
+from alert_notify import alert_notify_flow
 
 sys.path.insert(0, '/opt/prefect')
 
 logger = logging.getLogger(__name__)
 
 GARAGE_ENDPOINT = os.getenv('GARAGE_ENDPOINT', 'http://garage:3900')
-GARAGE_ACCESS_KEY = os.getenv('GARAGE_ACCESS_KEY', 'GKc98624849db70446555a905b')
-GARAGE_SECRET_KEY = os.getenv('GARAGE_SECRET_KEY', '934f97fb29df4f1da215e689c57ab5b42c4e42798841961e4df77d4d3ae6c828')
+GARAGE_ACCESS_KEY = os.environ['GARAGE_ACCESS_KEY']
+GARAGE_SECRET_KEY = os.environ['GARAGE_SECRET_KEY']
 BUCKET = os.getenv('GARAGE_BUCKET', 'stock-bucket')
 
 def get_garage_client():
@@ -72,7 +75,7 @@ def upload_to_garage(df):
     key = f"raw-data/saham_daily_{date_str}.csv"
     client.put_object(Bucket=BUCKET, Key=key, Body=csv_buffer.getvalue().encode('utf-8'))
     logger.info(f"Uploaded to {BUCKET}/{key}")
-    return f"s3://{BUCKET}/{key}"
+    return f"s3a://{BUCKET}/{key}"
 
 @task
 def spark_batch_etl(minio_path):
@@ -87,7 +90,10 @@ def spark_batch_etl(minio_path):
         .config("spark.hadoop.fs.s3a.secret.key", GARAGE_SECRET_KEY) \
         .config("spark.hadoop.fs.s3a.path.style.access", "true") \
         .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
-        .config("spark.jars.packages", "org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262") \
+        .config("spark.hadoop.fs.s3a.endpoint.region", "garage") \
+        .config("spark.hadoop.fs.s3a.connection.ssl.enabled", "false") \
+        .config("spark.sql.parquet.compression.codec", "gzip") \
+        .config("spark.jars.packages", "org.apache.hadoop:hadoop-aws:3.4.2,com.amazonaws:aws-java-sdk-bundle:1.12.262") \
         .getOrCreate()
 
     df = spark.read.csv(minio_path, header=True, inferSchema=True)
@@ -118,8 +124,8 @@ def data_quality_check():
     obj = client.get_object(Bucket=BUCKET, Key=latest[0]['Key'])
     df = pd.read_csv(StringIO(obj['Body'].read().decode('utf-8')))
 
-    null_counts = df.isnull().sum().to_dict()
-    null_rows = df.isnull().any(axis=1).sum()
+    null_counts = {k: int(v) for k, v in df.isnull().sum().items()}
+    null_rows = int(df.isnull().any(axis=1).sum())
     report = {
         'total_rows': len(df), 'null_counts': null_counts,
         'null_rows': null_rows, 'null_pct': round(null_rows / max(len(df), 1) * 100, 2),
@@ -162,12 +168,16 @@ def check_ihsg_6000():
 
 @flow(log_prints=True)
 def batch_flow():
-    check_environment()
-    df = scrape_stock_data()
-    path = upload_to_garage(df)
-    spark_batch_etl(path)
-    data_quality_check()
-    check_ihsg_6000()
+    try:
+        check_environment()
+        df = scrape_stock_data()
+        path = upload_to_garage(df)
+        spark_batch_etl(path)
+        data_quality_check()
+        check_ihsg_6000()
+    except Exception as e:
+        alert_notify_flow(flow_name="Batch Pipeline", error=str(e))
+        raise
 
 if __name__ == "__main__":
     batch_flow()

@@ -2,6 +2,8 @@ from prefect import flow, task
 from prefect.context import get_run_context
 import os, smtplib, json, logging
 from email.mime.text import MIMEText
+from dotenv import load_dotenv, find_dotenv
+load_dotenv(find_dotenv())
 
 logger = logging.getLogger(__name__)
 
@@ -70,10 +72,21 @@ def alert_notify_flow(flow_name="unknown", error="unknown"):
     subject = f"[IPBD Alert] Pipeline Failed: {flow_name}"
     body = f"Flow: {flow_name}\nError: {error[:500]}\nTime: ..."
 
-    send_email(subject, body)
+    try:
+        send_email(subject, body)
+    except Exception as e:
+        logger.error(f"Email failed: {e}")
+
     msg = f"🔴 Pipeline Alert\nFlow: {flow_name}\nError: {error[:200]}"
-    send_telegram(msg)
-    send_whatsapp(msg)
+    try:
+        send_telegram(msg)
+    except Exception as e:
+        logger.error(f"Telegram failed: {e}")
+
+    try:
+        send_whatsapp(msg)
+    except Exception as e:
+        logger.error(f"WhatsApp failed: {e}")
 
 if __name__ == "__main__":
     alert_notify_flow(flow_name="test", error="test error")

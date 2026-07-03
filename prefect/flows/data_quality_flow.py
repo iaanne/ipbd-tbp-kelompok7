@@ -3,13 +3,15 @@ import os, sys, json, logging, boto3, pandas as pd
 from io import StringIO, BytesIO
 from datetime import datetime
 from botocore.config import Config
+from dotenv import load_dotenv, find_dotenv
+load_dotenv(find_dotenv())
 
 sys.path.insert(0, '/opt/prefect')
 logger = logging.getLogger(__name__)
 
 GARAGE_ENDPOINT = os.getenv('GARAGE_ENDPOINT', 'http://garage:3900')
-GARAGE_ACCESS_KEY = os.getenv('GARAGE_ACCESS_KEY', 'GKc98624849db70446555a905b')
-GARAGE_SECRET_KEY = os.getenv('GARAGE_SECRET_KEY', '934f97fb29df4f1da215e689c57ab5b42c4e42798841961e4df77d4d3ae6c828')
+GARAGE_ACCESS_KEY = os.environ['GARAGE_ACCESS_KEY']
+GARAGE_SECRET_KEY = os.environ['GARAGE_SECRET_KEY']
 BUCKET = os.getenv('GARAGE_BUCKET', 'stock-bucket')
 
 def get_garage_client():
